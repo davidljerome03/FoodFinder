@@ -1,6 +1,7 @@
 import json
 import uuid
 import math
+from pathlib import Path
 from typing import List, Dict, Any
 
 def generate_mock_data(filepath: str = "dummy_restaurants.json"):
@@ -61,13 +62,18 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 def score_restaurants(
     consensus_vector: Dict[str, float], 
-    dummy_json_path: str, 
+    dummy_json_path: str = None,
     group_max_price: str = "$$$$",
-    group_location: Dict[str, float] = None
+    group_location: Dict[str, float] = None,
+    restaurants: List[Dict[str, Any]] = None,
+    include_debug: bool = True,
 ) -> List[Dict[str, Any]]:
-    
-    with open(dummy_json_path, 'r') as f:
-        restaurants = json.load(f)
+    if restaurants is None:
+        data_path = Path(dummy_json_path) if dummy_json_path else Path(__file__).with_name("dummy_restaurants.json")
+        if not data_path.is_absolute():
+            data_path = Path(__file__).parent / data_path
+        with data_path.open("r", encoding="utf-8") as f:
+            restaurants = json.load(f)
         
     price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
     max_level = price_levels.get(group_max_price, 4)
@@ -118,13 +124,47 @@ def score_restaurants(
     top_3 = []
     for item in scored_restaurants[:3]:
         rest_data = item["restaurant"].copy()
-        rest_data["_debug_stats"] = {
-            "final_score": round(item["final_score"], 2),
-            "distance_miles": round(item["distance"], 2)
-        }
+        if include_debug:
+            rest_data["_debug_stats"] = {
+                "final_score": round(item["final_score"], 2),
+                "distance_miles": round(item["distance"], 2)
+            }
         top_3.append(rest_data)
         
     return top_3
+
+
+def recommend_restaurants(
+    mood_requests: List[Dict[str, Any]], group_location: Dict[str, float]
+) -> List[Dict[str, Any]]:
+    """Return public restaurant payloads after applying group-wide hard limits."""
+    price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
+    max_price = min(
+        (price_levels.get(request.get("max_price", "$$$$"), 4) for request in mood_requests),
+        default=4,
+    )
+    vetoes = {
+        cuisine.lower()
+        for request in mood_requests
+        for cuisine in request.get("vetoed_cuisines", [])
+    }
+    data_path = Path(__file__).with_name("dummy_restaurants.json")
+    with data_path.open("r", encoding="utf-8") as file:
+        restaurants = json.load(file)
+    eligible = [
+        restaurant
+        for restaurant in restaurants
+        if price_levels.get(restaurant.get("price"), 1) <= max_price
+        and not vetoes.intersection(cuisine.lower() for cuisine in restaurant.get("cuisines", []))
+    ]
+    vector = calculate_consensus_vector(mood_requests)
+    return score_restaurants(
+        consensus_vector=vector,
+        restaurants=eligible,
+        group_max_price="$" * max_price,
+        group_location=group_location,
+        include_debug=False,
+    )
 
 if __name__ == "__main__":
     filepath = "dummy_restaurants.json"
