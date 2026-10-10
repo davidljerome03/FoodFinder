@@ -9,10 +9,18 @@ A Jackbox-style real-time web application to solve group dining debates using vo
    ```bash
    cd backend
    ```
-2. Create and activate a virtual environment (optional but recommended):
+2. Create and activate a virtual environment:
    ```bash
    python -m venv venv
-   source venv/bin/activate  # On Windows use `venv\Scripts\activate`
+   
+   # On Mac/Linux:
+   source venv/bin/activate
+   
+   # On Windows (Command Prompt):
+   venv\Scripts\activate
+   
+   # On Windows (PowerShell):
+   .\venv\Scripts\activate
    ```
 3. Install dependencies:
    ```bash
