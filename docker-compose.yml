@@ -16,12 +16,12 @@ services:
   backend:
     build: ./backend
     ports:
-      - "127.0.0.1:8000:8000"
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://foodfinder:foodfinder_secret_password@db:5432/foodfinder
+      - "8080:8000"
+    env_file:
+      - ./backend/.env
     depends_on:
       - db
-    restart: unless-stopped
+    restart: always
 
   # Nginx serving React Frontend & Reverse Proxying to Backend
   frontend:

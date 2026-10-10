@@ -37,7 +37,6 @@ class NameRequest(BaseModel):
 class CreateLobbyRequest(NameRequest):
     group_location: Location = Location(**DEFAULT_LOCATION)
 
-
 class UserPreference(BaseModel):
     desired_cuisines: list[str] = Field(default_factory=list, max_length=20)
     vetoed_cuisines: list[str] = Field(default_factory=list, max_length=20)
@@ -111,7 +110,7 @@ app.add_middleware(CORSMiddleware, allow_origins=sorted(ALLOWED_ORIGINS), allow_
 @app.get("/")
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "message": "Food Finder Backend Active"}
+    return {"status": "Backend Active"}
 
 
 @app.post("/api/recommend")
