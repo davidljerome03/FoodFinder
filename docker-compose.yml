@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS extension for geographic queries
+  db:
+    image: postgis/postgis:15-3.3
+    environment:
+      POSTGRES_USER: foodfinder
+      POSTGRES_PASSWORD: foodfinder_secret_password
+      POSTGRES_DB: foodfinder
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # FastAPI Backend
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://foodfinder:foodfinder_secret_password@db:5432/foodfinder
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  # Nginx serving React Frontend & Reverse Proxying to Backend
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgis_data:
