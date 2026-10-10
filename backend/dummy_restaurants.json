@@ -1,0 +1,210 @@
+[
+  {
+    "id": "cdabccfb-4d9c-4b41-8151-f78eb6a439e8",
+    "name": "The Burger Joint",
+    "price": "$$",
+    "cuisines": [
+      "American",
+      "Burgers"
+    ],
+    "coordinates": {
+      "lat": 28.5383,
+      "lng": -81.3792
+    }
+  },
+  {
+    "id": "f71fdad0-cc36-4ce8-b983-fe66f4fc1b7d",
+    "name": "Taco Fiesta",
+    "price": "$",
+    "cuisines": [
+      "Mexican",
+      "Tacos"
+    ],
+    "coordinates": {
+      "lat": 28.539,
+      "lng": -81.38
+    }
+  },
+  {
+    "id": "baa78f79-1396-4816-bcf0-d712e4fb4888",
+    "name": "Sushi Central",
+    "price": "$$$",
+    "cuisines": [
+      "Japanese",
+      "Sushi"
+    ],
+    "coordinates": {
+      "lat": 28.54,
+      "lng": -81.375
+    }
+  },
+  {
+    "id": "d58e9422-86af-4fa0-a7b9-66d9607c3759",
+    "name": "Pizza Haven",
+    "price": "$$",
+    "cuisines": [
+      "Italian",
+      "Pizza"
+    ],
+    "coordinates": {
+      "lat": 28.5375,
+      "lng": -81.381
+    }
+  },
+  {
+    "id": "a13e4134-e1ca-46fe-bdff-57e444f3db6a",
+    "name": "Spicy Thai",
+    "price": "$$",
+    "cuisines": [
+      "Thai",
+      "Asian"
+    ],
+    "coordinates": {
+      "lat": 28.541,
+      "lng": -81.378
+    }
+  },
+  {
+    "id": "e7bc7d34-75ab-4b34-9be1-4c179621be96",
+    "name": "Vegan Delights",
+    "price": "$$",
+    "cuisines": [
+      "Vegan",
+      "Healthy"
+    ],
+    "coordinates": {
+      "lat": 28.536,
+      "lng": -81.377
+    }
+  },
+  {
+    "id": "d30061af-d40a-48d0-9254-5768a8915b3d",
+    "name": "Steakhouse Prime",
+    "price": "$$$$",
+    "cuisines": [
+      "American",
+      "Steak"
+    ],
+    "coordinates": {
+      "lat": 28.542,
+      "lng": -81.374
+    }
+  },
+  {
+    "id": "d0d47d4f-5533-4753-b98e-8c1a4433a6d5",
+    "name": "Pho King",
+    "price": "$",
+    "cuisines": [
+      "Vietnamese",
+      "Soup"
+    ],
+    "coordinates": {
+      "lat": 28.535,
+      "lng": -81.3795
+    }
+  },
+  {
+    "id": "784065c0-fa5c-4215-b1d9-de69972523d9",
+    "name": "Mediterranean Grill",
+    "price": "$$",
+    "cuisines": [
+      "Mediterranean",
+      "Greek"
+    ],
+    "coordinates": {
+      "lat": 28.5388,
+      "lng": -81.382
+    }
+  },
+  {
+    "id": "598e468e-6ec2-4867-9d33-974e44ef01d8",
+    "name": "The Breakfast Club",
+    "price": "$",
+    "cuisines": [
+      "Breakfast",
+      "American"
+    ],
+    "coordinates": {
+      "lat": 28.5405,
+      "lng": -81.3805
+    }
+  },
+  {
+    "id": "53757a77-fda5-4fe1-887a-768192d3012c",
+    "name": "Curry House",
+    "price": "$$",
+    "cuisines": [
+      "Indian",
+      "Curry"
+    ],
+    "coordinates": {
+      "lat": 28.5395,
+      "lng": -81.376
+    }
+  },
+  {
+    "id": "b2560682-f881-42d9-a2a1-f66edae7c3de",
+    "name": "Noodle Bar",
+    "price": "$",
+    "cuisines": [
+      "Japanese",
+      "Ramen"
+    ],
+    "coordinates": {
+      "lat": 28.537,
+      "lng": -81.38
+    }
+  },
+  {
+    "id": "cac82416-7243-40e1-8475-c76104a92325",
+    "name": "BBQ Pit",
+    "price": "$$",
+    "cuisines": [
+      "American",
+      "BBQ"
+    ],
+    "coordinates": {
+      "lat": 28.5365,
+      "lng": -81.3785
+    }
+  },
+  {
+    "id": "f61b3824-04cc-40fa-82c3-3d96514f1aa6",
+    "name": "Seafood Shack",
+    "price": "$$$",
+    "cuisines": [
+      "Seafood",
+      "American"
+    ],
+    "coordinates": {
+      "lat": 28.5415,
+      "lng": -81.379
+    }
+  },
+  {
+    "id": "67d90134-c26f-42de-acb1-65ae48d53e5b",
+    "name": "French Bistro",
+    "price": "$$$",
+    "cuisines": [
+      "French",
+      "European"
+    ],
+    "coordinates": {
+      "lat": 28.538,
+      "lng": -81.3745
+    }
+  },
+  {
+    "id": "bf5ed5b8-1779-463e-8319-20eaab477ba5",
+    "name": "Dim Sum Place",
+    "price": "$$",
+    "cuisines": [
+      "Chinese",
+      "Dim Sum"
+    ],
+    "coordinates": {
+      "lat": 28.5392,
+      "lng": -81.3815
+    }
+  }
+]
