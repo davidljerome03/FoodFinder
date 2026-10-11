@@ -468,14 +468,8 @@ function EntryScreen({ onJoin }) {
 
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
-      {/* Top Header - Clean transparent vector branding */}
-      <header className="flex justify-between items-center max-w-5xl w-full mx-auto mb-6 sm:mb-8">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-navy-900 text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
-            <UtensilsCrossed size={18} />
-          </div>
-          <span className="font-bold text-xl tracking-tight leading-none text-navy-900">food finder</span>
-        </div>
+      {/* Top Header - Live indicator only (no logo on top left) */}
+      <header className="flex justify-end items-center max-w-5xl w-full mx-auto mb-6 sm:mb-8">
         <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
           <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></div>
           <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 01</span>
@@ -484,47 +478,24 @@ function EntryScreen({ onJoin }) {
 
       {/* Main Two-Column Card Layout */}
       <main className="max-w-5xl w-full mx-auto bg-card rounded-3xl border-2 border-navy-900 shadow-[6px_6px_0px_0px_rgba(28,46,53,1)] overflow-hidden flex flex-col md:flex-row my-auto">
-        {/* Left Dark Column - Transparent Logo Seamlessly Integrated into Main FOOD FINDER text */}
+        {/* Left Dark Column */}
         <section className="bg-navy-900 text-white p-8 sm:p-12 md:w-5/12 flex flex-col justify-between relative overflow-hidden border-b-2 md:border-b-0 md:border-r-2 border-navy-900">
           <div>
-            <div className="text-[10px] font-mono tracking-widest text-[#FF7A59] uppercase font-bold mb-5 flex items-center gap-1.5">
-              <span>★</span> THE GROUP DINNER DECISION DEVICE
+            <div className="text-[10px] font-mono tracking-widest text-[#FF7A59] uppercase font-bold mb-4">
+              THE GROUP DINNER DECISION DEVICE
             </div>
-
-            {/* Logo Emblem & Main Brand Text seamlessly integrated */}
-            <div className="mb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-[#142227] border-2 border-[#FF5A36] p-1.5 shadow-[3px_3px_0px_0px_rgba(255,90,54,0.4)] flex items-center justify-center shrink-0 relative">
-                  <img src="/favicon.svg" alt="Food Finder Pin Logo" className="w-full h-full object-contain" />
-                  <div className="absolute -top-1 -right-1 flex gap-0.5">
-                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-green-400 block">OFFICIAL</span>
-                  <span className="text-xs font-mono tracking-wider text-white/70">Decision Device</span>
-                </div>
-              </div>
-
-              <h1 className="text-5xl sm:text-6xl font-black text-[#FF6B4A] tracking-tighter leading-[0.92] uppercase font-sans">
-                FOOD<br />
-                <span className="text-white relative">
-                  FINDER
-                  <span className="text-green-400">.</span>
-                  <span className="absolute -top-2.5 -right-5 text-green-400 text-base select-none">✦</span>
-                </span>
-              </h1>
-            </div>
-
+            <h1 className="text-5xl sm:text-6xl font-black text-[#FF6B4A] tracking-tighter leading-[0.92] mb-8 uppercase font-sans">
+              FOOD<br />FINDER.
+            </h1>
             <p className="text-sm sm:text-base text-white/80 font-medium leading-relaxed">
               Less &ldquo;where should we eat?&rdquo;<br />
               More &ldquo;see you there.&rdquo;
             </p>
           </div>
 
-          <div className="mt-10 flex items-center justify-between pt-6 border-t border-white/10">
-            <div className="w-11 h-11 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
-              <UtensilsCrossed size={20} />
+          <div className="mt-12 flex items-center justify-between">
+            <div className="w-12 h-12 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
+              <UtensilsCrossed size={22} />
             </div>
             <span className="text-[10px] font-mono tracking-widest uppercase text-white/40">
               FAST · LIVE · FAIR
