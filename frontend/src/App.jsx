@@ -183,12 +183,12 @@ function WeightsInspector({ consensusData, members }) {
   const vetoList = Array.isArray(rawVetoes)
     ? rawVetoes.map((item) => ({
         trait: typeof item === 'object' ? item.trait || item.name || 'Restricted' : String(item),
-        weight: typeof item === 'object' ? Number(item.weight ?? -999) : -999,
+        weight: typeof item === 'object' ? Number(item.weight ?? -100) : -100,
         isAllergy: typeof item === 'object' ? Boolean(item.is_allergy) : false,
       }))
     : Object.entries(rawVetoes).map(([key, val]) => ({
         trait: key,
-        weight: typeof val === 'object' ? Number(val.weight ?? -999) : Number(val ?? -999),
+        weight: typeof val === 'object' ? Number(val.weight ?? -100) : Number(val ?? -100),
         isAllergy: false,
       }))
 
@@ -309,7 +309,9 @@ function WeightsInspector({ consensusData, members }) {
                     >
                       <span className="font-bold text-red-900 capitalize">{item.trait}</span>
                       <span className="font-mono font-bold text-[10px] text-red-700 bg-red-200 px-2 py-0.5 rounded uppercase">
-                        {item.isAllergy ? 'Allergy Veto (-999)' : 'Strict Veto (-999)'}
+                        {item.isAllergy
+                          ? `Allergy Penalty (${Number(item.weight).toFixed(1)})`
+                          : `Strict Veto (${Number(item.weight).toFixed(0)})`}
                       </span>
                     </div>
                   ))}

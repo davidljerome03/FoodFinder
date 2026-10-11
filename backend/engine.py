@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -87,21 +88,21 @@ def resolve_photo_url(photo_resource: str, api_key: str, cuisines: List[str]) ->
 
     return f"/api/photos?name={urllib.parse.quote(clean_name)}"
 
-# Dietary and Allergy Conflict Map
+# Dietary and Allergy Conflict Map (Nerfed to prevent over-vetoing broad cuisine families)
 ALLERGY_CONFLICTS: Dict[str, set[str]] = {
-    "seafood": {"seafood", "fish", "sushi", "shellfish"},
-    "fish": {"seafood", "fish", "sushi"},
-    "shellfish": {"seafood", "shellfish", "crab", "lobster", "shrimp"},
-    "peanuts": {"thai", "vietnamese", "asian"},
-    "peanut": {"thai", "vietnamese", "asian"},
-    "nuts": {"thai", "vietnamese", "asian", "bakery"},
-    "tree nuts": {"thai", "vietnamese", "asian", "bakery"},
-    "gluten": {"pizza", "italian", "pasta", "ramen", "bakery"},
-    "celiac": {"pizza", "italian", "pasta", "ramen", "bakery"},
-    "dairy": {"ice cream", "pizza", "cheese"},
-    "lactose": {"ice cream", "pizza", "cheese"},
-    "vegetarian": {"steak", "bbq", "steakhouse"},
-    "vegan": {"steak", "bbq", "steakhouse", "burgers"},
+    "seafood": {"seafood", "fish", "sushi", "shellfish", "crab", "lobster", "shrimp", "oyster", "clam"},
+    "fish": {"fish", "sushi", "raw_fish"},
+    "shellfish": {"shellfish", "crab", "lobster", "shrimp", "oyster", "clam"},
+    "peanuts": {"peanuts", "peanut"},
+    "peanut": {"peanuts", "peanut"},
+    "nuts": {"nuts", "tree_nuts", "walnut", "almond", "pecan"},
+    "tree nuts": {"nuts", "tree_nuts", "walnut", "almond", "pecan"},
+    "gluten": {"bakery"},
+    "celiac": {"bakery"},
+    "dairy": {"ice_cream"},
+    "lactose": {"ice_cream"},
+    "vegetarian": {"steakhouse", "bbq", "smokehouse"},
+    "vegan": {"steakhouse", "bbq", "smokehouse"},
 }
 
 
@@ -141,45 +142,101 @@ IGNORED_PLACE_TYPES = {
 
 # Comprehensive Cuisine and Dish Synonyms for Semantic Overlap
 CUISINE_SYNONYMS: Dict[str, set[str]] = {
-    "mexican": {"mexican", "taco", "tacos", "burrito", "burritos", "taqueria", "cantina", "tex_mex", "tex-mex", "latin_american", "quesadilla", "fajita", "tortilla"},
+    "mexican": {"mexican", "taco", "tacos", "burrito", "burritos", "taqueria", "cantina", "tex_mex", "texmex", "quesadilla", "fajita", "tortilla"},
     "italian": {"italian", "pasta", "trattoria", "osteria", "pizzeria", "gelato", "risotto"},
-    "pizza": {"pizza", "pizzeria", "slice", "pies", "italian"},
+    "pizza": {"pizza", "pizzeria", "slice", "pies"},
     "sushi": {"sushi", "sashimi", "nigiri", "maki", "roll", "japanese", "raw_fish"},
     "japanese": {"japanese", "sushi", "ramen", "izakaya", "hibachi", "teriyaki", "udon"},
-    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "shake", "patty", "fast_food", "american"},
-    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "shake", "patty", "fast_food", "american"},
-    "thai": {"thai", "pad_thai", "pad thai", "curry", "siamese", "southeast_asian"},
+    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "patty"},
+    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "patty"},
+    "thai": {"thai", "pad_thai", "pad thai", "curry", "siamese"},
     "seafood": {"seafood", "fish", "crab", "lobster", "oyster", "shrimp", "clam"},
-    "chinese": {"chinese", "dim_sum", "dim sum", "dumpling", "wok", "cantonese", "szechuan", "asian"},
+    "chinese": {"chinese", "dim_sum", "dim sum", "dumpling", "wok", "cantonese", "szechuan"},
     "vietnamese": {"vietnamese", "pho", "banh_mi", "banh mi"},
     "bbq": {"bbq", "barbecue", "smokehouse", "ribs", "brisket"},
     "steak": {"steak", "steakhouse", "chophouse", "grill"},
     "steakhouse": {"steakhouse", "steak", "chophouse", "grill"},
-    "mediterranean": {"mediterranean", "greek", "gyro", "falafel", "shawarma", "hummus", "kebab", "middle_eastern"},
+    "mediterranean": {"mediterranean", "greek", "gyro", "falafel", "shawarma", "hummus", "kebab"},
     "bakery": {"bakery", "bake", "pastry", "bagel", "donut", "doughnut"},
     "dessert": {"dessert", "ice_cream", "ice cream", "sweet", "crepe"},
     "cafe": {"cafe", "coffee", "espresso", "bistro"},
-    "american": {"american", "diner", "wings", "sports_bar", "burger"},
+    "american": {"american", "diner", "traditional_american", "new_american", "wings", "sports_bar"},
+    "latin_american": {"latin_american", "hispanic", "arepas", "empanadas"},
 }
+
+
+def normalize_tag(tag: str) -> str:
+    """Normalizes a cuisine/dish tag into standard lower snake_case."""
+    s = str(tag).strip().lower().replace("-", "_").replace(" ", "_")
+    while "__" in s:
+        s = s.replace("__", "_")
+    return s
+
+
+def tag_matches_synset(tag_norm: str, synset: set[str]) -> bool:
+    """Checks if a normalized tag matches a synonym set using exact token and word-boundary semantics."""
+    if tag_norm in synset:
+        return True
+
+    tag_stem = tag_norm.rstrip("s") if len(tag_norm) > 3 else tag_norm
+    for s in synset:
+        s_norm = normalize_tag(s)
+        s_stem = s_norm.rstrip("s") if len(s_norm) > 3 else s_norm
+        if tag_norm == s_norm or tag_stem == s_stem:
+            return True
+
+        # Word boundary token matching (e.g. 'mexican_restaurant' matches 'mexican')
+        words = tag_norm.split("_")
+        s_words = s_norm.split("_")
+
+        # Explicit guard: prevent 'american' from ever matching compound words containing 'latin'
+        if s_norm == "american" and "latin" in words:
+            continue
+        if tag_norm == "american" and "latin" in s_words:
+            continue
+
+        if s_norm in words or tag_norm in s_words:
+            return True
+
+    return False
 
 
 def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
     """
-    Checks if two cuisine or dish tags overlap directly, as substrings,
-    or via known cuisine synonym groups (e.g. 'Tacos' matches 'Mexican', 'Burger' matches 'Burgers').
+    Checks if two cuisine or dish tags overlap directly, via plural stems,
+    or via known cuisine synonym groups (e.g. 'Tacos' matches 'Mexican').
+    Strictly prevents cross-matching between distinct categories (e.g. 'Mexican' vs 'American').
     """
-    a = str(cuisine_a).strip().lower().replace("-", "_")
-    b = str(cuisine_b).strip().lower().replace("-", "_")
+    a = normalize_tag(cuisine_a)
+    b = normalize_tag(cuisine_b)
     if not a or not b:
         return False
     if a == b:
         return True
-    if a in b or b in a:
+
+    # Explicit guard: Never match 'american' with 'latin_american'
+    if ("latin" in a and b == "american") or ("latin" in b and a == "american"):
+        return False
+
+    # Plural / singular direct check
+    if len(a) > 3 and len(b) > 3 and a.rstrip("s") == b.rstrip("s"):
         return True
-    for key, syns in CUISINE_SYNONYMS.items():
-        all_syns = syns | {key}
-        if any(s in a or a in s for s in all_syns) and any(s in b or b in s for s in all_syns):
+
+    # Strip standard descriptor suffixes (e.g. 'mexican_restaurant' -> 'mexican')
+    for suffix in ["_restaurant", "_food", "_store", "_place", "_bar", "_house", "_grill"]:
+        a_base = a[:-len(suffix)] if a.endswith(suffix) else a
+        b_base = b[:-len(suffix)] if b.endswith(suffix) else b
+        if a_base == b_base:
             return True
+        if len(a_base) > 3 and len(b_base) > 3 and a_base.rstrip("s") == b_base.rstrip("s"):
+            return True
+
+    # Check known cuisine clusters
+    for cluster_name, synset in CUISINE_SYNONYMS.items():
+        all_syns = synset | {cluster_name}
+        if tag_matches_synset(a, all_syns) and tag_matches_synset(b, all_syns):
+            return True
+
     return False
 
 
@@ -209,8 +266,22 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
                 cuisines.append(formatted)
 
     name_lower = name.lower()
+    name_words = set(re.findall(r"\b[a-z0-9]+\b", name_lower))
     for cat, syns in CUISINE_SYNONYMS.items():
-        if any(s in name_lower for s in syns):
+        matched_name = False
+        for s in syns:
+            s_clean = s.lower().replace("-", " ").replace("_", " ")
+            if " " in s_clean:
+                if s_clean in name_lower:
+                    matched_name = True
+                    break
+            else:
+                if s_clean in name_words:
+                    if s_clean == "american" and "latin" in name_words:
+                        continue
+                    matched_name = True
+                    break
+        if matched_name:
             formatted_cat = format_cuisine_type(cat)
             if formatted_cat and formatted_cat not in cuisines:
                 cuisines.append(formatted_cat)
@@ -399,10 +470,37 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
         raise RuntimeError(f"Failed to query Google Places API: {exc}") from exc
 
 
+def get_allergy_conflict_tags(allergy: str) -> set[str]:
+    """Returns the normalized conflict tags for a specific allergy or restriction."""
+    a_clean = normalize_tag(allergy)
+    res = {a_clean}
+    for key, confs in ALLERGY_CONFLICTS.items():
+        if a_clean == key or (len(key) > 3 and a_clean.rstrip("s") == key.rstrip("s")):
+            res.update(confs)
+    return res
+
+
+def restaurant_conflicts_with_allergy(cuisines: List[str], allergy: str) -> bool:
+    """Checks if a restaurant's cuisines conflict directly with a specific dietary restriction."""
+    conflict_tags = get_allergy_conflict_tags(allergy)
+    for c in cuisines:
+        c_norm = normalize_tag(c)
+        if c_norm in conflict_tags:
+            return True
+        c_stem = c_norm.rstrip("s") if len(c_norm) > 3 else c_norm
+        for tag in conflict_tags:
+            tag_stem = tag.rstrip("s") if len(tag) > 3 else tag
+            if c_norm == tag or c_stem == tag_stem:
+                return True
+    return False
+
+
 def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str, float]:
     """
-    Calculates a mathematical Consensus Vector. Adds positive magnitude for desired 
-    cuisines and applies a massive penalty (veto) for explicitly rejected cuisines and allergies.
+    Calculates a mathematical Consensus Vector. Adds positive magnitude (+1.0) for desired 
+    cuisines, applies a strict veto (-100.0) for explicitly rejected cuisines, and applies a
+    balanced deprioritization penalty (-2.5) for dietary/allergy restrictions (nerfed so
+    they guide consensus without nuclear-vetoing viable group dining options).
     Supports 'anything' as a wildcard state.
     """
     vector: Dict[str, float] = {}
@@ -414,25 +512,21 @@ def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str,
         # Positive votes
         for cuisine in desired:
             c_clean = str(cuisine).strip().lower()
-            if c_clean:
+            if c_clean and c_clean != "anything":
                 vector[c_clean] = vector.get(c_clean, 0.0) + 1.0
 
-        # The Veto System: Massive negative weights
+        # The Veto System: Explicit rejection (-100.0)
         for cuisine in vetoed:
             c_clean = str(cuisine).strip().lower()
             if c_clean:
                 vector[c_clean] = vector.get(c_clean, 0.0) - 100.0
 
-        # Strict Allergy Vetoes: Extreme negative weights that guarantee exclusion
+        # Nerfed Allergy System: Soft deprioritization (-2.5) instead of nuclear exclusion
         for allergy in allergies:
             a_clean = str(allergy).strip().lower()
             if not a_clean:
                 continue
-            vector[a_clean] = vector.get(a_clean, 0.0) - 500.0
-            for key, conflicts in ALLERGY_CONFLICTS.items():
-                if key in a_clean or a_clean in key:
-                    for conf in conflicts:
-                        vector[conf] = vector.get(conf, 0.0) - 500.0
+            vector[a_clean] = vector.get(a_clean, 0.0) - 2.5
 
     return vector
 
@@ -454,6 +548,7 @@ def score_restaurants(
     group_location: Optional[Dict[str, float]] = None,
     include_debug: bool = True,
     is_wildcard: bool = False,
+    group_allergies: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scores restaurants using the Vector Dot Product with Semantic Overlap.
@@ -479,7 +574,7 @@ def score_restaurants(
 
         cuisines = [str(c).strip().lower() for c in rest.get("cuisines", [])]
 
-        # Check for any strict veto or allergy hit
+        # Check for strict vetoes (weight <= -50.0)
         has_veto = False
         for c in cuisines:
             for neg_tag, neg_wt in negative_traits.items():
@@ -514,14 +609,32 @@ def score_restaurants(
             dot_product_score = 1.0
             matching_traits.append({"trait": "Wildcard (Open Choice)", "weight": 1.0})
 
-        # 2. Distance Penalty (0.25 points per mile away)
+        # 2. Allergy Penalty (Soft deprioritization: 2.5 points per conflicting group allergy)
+        allergy_penalty = 0.0
+        conflicted_allergies = []
+        if group_allergies:
+            for allergy in group_allergies:
+                a_clean = str(allergy).strip().lower()
+                if not a_clean:
+                    continue
+                if restaurant_conflicts_with_allergy(cuisines, a_clean):
+                    allergy_penalty += 2.5
+                    conflicted_allergies.append(format_cuisine_type(a_clean))
+
+        # 3. Distance Penalty (0.25 points per mile away)
         coords = rest.get("coordinates", {})
         rest_lat = coords.get("lat", group_location["lat"])
         rest_lng = coords.get("lng", group_location["lng"])
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
         distance_penalty = distance * 0.25
-        final_score = dot_product_score - distance_penalty
-        formula = f"+{dot_product_score:.2f} (Match) - {distance_penalty:.2f} ({distance:.1f} mi) = {final_score:.2f} pts"
+        final_score = dot_product_score - allergy_penalty - distance_penalty
+
+        formula_parts = [f"+{dot_product_score:.2f} (Match)"]
+        if allergy_penalty > 0:
+            conflict_str = ", ".join(conflicted_allergies)
+            formula_parts.append(f"- {allergy_penalty:.2f} (Allergy: {conflict_str})")
+        formula_parts.append(f"- {distance_penalty:.2f} ({distance:.1f} mi)")
+        formula = f"{' '.join(formula_parts)} = {final_score:.2f} pts"
 
         scored_restaurants.append({
             "restaurant": rest,
@@ -529,6 +642,7 @@ def score_restaurants(
             "distance": distance,
             "price_level": rest_price_level,
             "match_score": dot_product_score,
+            "allergy_penalty": allergy_penalty,
             "distance_penalty": distance_penalty,
             "matched_traits": matching_traits,
             "formula": formula,
@@ -544,6 +658,7 @@ def score_restaurants(
         if include_debug:
             rest_data["_debug_stats"] = {
                 "match_score": round(item["match_score"], 2),
+                "allergy_penalty": round(item["allergy_penalty"], 2),
                 "distance_penalty": round(item["distance_penalty"], 2),
                 "distance_miles": round(item["distance"], 2),
                 "final_score": round(item["final_score"], 2),
@@ -615,28 +730,17 @@ def recommend_restaurants(
         for cuisine in request.get("vetoed_cuisines", [])
     }
 
-    # Collect all group allergies and their mapped conflicted tags
+    # Collect all group allergies for metadata reporting
     allergies = {
         str(a).strip().lower()
         for request in mood_requests
         for a in request.get("allergies", [])
         if str(a).strip()
     }
-    allergy_conflicted_tags = set(allergies)
-    for allergy in allergies:
-        for key, conflicts in ALLERGY_CONFLICTS.items():
-            if key in allergy or allergy in key:
-                allergy_conflicted_tags.update(conflicts)
 
-    # Filter out vetoes, allergies, and closed restaurants
-    def has_allergy_conflict(rest: Dict[str, Any]) -> bool:
-        rest_tags = {str(c).strip().lower() for c in rest.get("cuisines", [])}
-        for tag in rest_tags:
-            for bad in allergy_conflicted_tags:
-                if bad in tag or tag in bad:
-                    return True
-        return False
-
+    # Filter out closed restaurants, price violations, and explicit group vetoes
+    # NOTE: Allergies are handled via soft scoring penalties in score_restaurants rather than
+    # hard-vetoing restaurants from the eligible pool.
     eligible = [
         r for r in raw_restaurants
         if r.get("is_open", True)
@@ -645,7 +749,6 @@ def recommend_restaurants(
             any(traits_overlap(c, v) for c in r.get("cuisines", []))
             for v in vetoes
         )
-        and not has_allergy_conflict(r)
     ]
 
     results = score_restaurants(
@@ -655,6 +758,7 @@ def recommend_restaurants(
         group_location=midpoint,
         include_debug=True,
         is_wildcard=is_wildcard,
+        group_allergies=list(allergies),
     )
 
     # STRICT RULE: NEVER fall back to zero-weight places!
@@ -685,7 +789,7 @@ def recommend_restaurants(
         {
             "trait": format_cuisine_type(k),
             "weight": round(v, 2),
-            "is_allergy": any(a in k or k in a for a in allergies),
+            "is_allergy": any(a in k.lower() or k.lower() in a for a in allergies) or (v > -50.0),
         }
         for k, v in sorted(vector.items(), key=lambda x: x[1])
         if v < 0
@@ -718,6 +822,7 @@ def recommend_restaurants(
                 "cuisines": r.get("cuisines", []),
                 "final_score": r.get("_debug_stats", {}).get("final_score", 0),
                 "match_score": r.get("_debug_stats", {}).get("match_score", 0),
+                "allergy_penalty": r.get("_debug_stats", {}).get("allergy_penalty", 0),
                 "distance_miles": r.get("_debug_stats", {}).get("distance_miles", 0),
                 "distance_penalty": r.get("_debug_stats", {}).get("distance_penalty", 0),
                 "matched_traits": r.get("_debug_stats", {}).get("matched_traits", []),
