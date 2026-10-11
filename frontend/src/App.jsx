@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, Component } from 'react'
 import { useLobbySocket } from './useLobbySocket'
 import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, AlertCircle, ShieldAlert, Trophy, Sliders, ChevronDown, ChevronUp, Scale, Calculator } from 'lucide-react'
 
@@ -115,17 +115,85 @@ function ErrorToast({ message, onClose }) {
 // -------------------------------------------------------------
 // WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
 // -------------------------------------------------------------
+// -------------------------------------------------------------
+// ERROR BOUNDARY (Guarantees app never hangs on a blank screen)
+// -------------------------------------------------------------
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false, error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error }
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error('Food Finder UI Error:', error, errorInfo)
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
+          <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2 text-red-600">Something went wrong</h1>
+            <p className="text-xs font-mono text-navy-900/80 mb-6 break-words bg-red-50 p-3 rounded-xl border border-red-200">
+              {this.state.error?.message || 'An unexpected rendering error occurred.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                sessionStorage.clear()
+                window.location.reload()
+              }}
+              className="w-full bg-orange-500 text-navy-900 font-bold py-3.5 rounded-xl border-2 border-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] hover:bg-orange-400"
+            >
+              Reset Session & Return to Home
+            </button>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
+
+// -------------------------------------------------------------
+// WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
+// -------------------------------------------------------------
 function WeightsInspector({ consensusData, members }) {
   const [isOpen, setIsOpen] = useState(true)
 
   if (!consensusData && (!members || members.length === 0)) return null
 
-  const positiveWeights = consensusData?.positive_weights || {}
-  const vetoes = consensusData?.vetoes_and_allergies || []
-  const candidatesMath = consensusData?.candidates_math || []
-  const midpoint = consensusData?.midpoint
+  // Normalize positive weights: handles array of objects, array of strings, or object map
+  const rawPositive = consensusData?.positive_weights || {}
+  const positiveList = Array.isArray(rawPositive)
+    ? rawPositive.map((item) => ({
+        trait: typeof item === 'object' ? item.trait || item.name || 'Trait' : String(item),
+        weight: typeof item === 'object' ? Number(item.weight ?? 1) : 1,
+      }))
+    : Object.entries(rawPositive).map(([key, val]) => ({
+        trait: key,
+        weight: typeof val === 'object' ? Number(val.weight ?? 1) : Number(val ?? 1),
+      }))
+  positiveList.sort((a, b) => b.weight - a.weight)
+  const maxPositiveWeight = Math.max(...positiveList.map((p) => p.weight), 1)
 
-  const positiveEntries = Object.entries(positiveWeights).sort((a, b) => b[1] - a[1])
+  // Normalize vetoes & allergies: handles array of objects, array of strings, or object map
+  const rawVetoes = consensusData?.vetoes_and_allergies || []
+  const vetoList = Array.isArray(rawVetoes)
+    ? rawVetoes.map((item) => ({
+        trait: typeof item === 'object' ? item.trait || item.name || 'Restricted' : String(item),
+        weight: typeof item === 'object' ? Number(item.weight ?? -999) : -999,
+        isAllergy: typeof item === 'object' ? Boolean(item.is_allergy) : false,
+      }))
+    : Object.entries(rawVetoes).map(([key, val]) => ({
+        trait: key,
+        weight: typeof val === 'object' ? Number(val.weight ?? -999) : Number(val ?? -999),
+        isAllergy: false,
+      }))
+
+  const candidatesMath = Array.isArray(consensusData?.candidates_math) ? consensusData.candidates_math : []
+  const midpoint = consensusData?.midpoint
 
   return (
     <div className="w-full max-w-7xl mx-auto mb-6 bg-amber-50/90 border-2 border-navy-900 rounded-2xl sm:rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] overflow-hidden transition-all text-navy-900">
@@ -186,21 +254,20 @@ function WeightsInspector({ consensusData, members }) {
                   Consensus Vector (Positive Weights)
                 </div>
                 <span className="text-[11px] font-mono text-navy-900/60 font-bold">
-                  {positiveEntries.length} trait{positiveEntries.length !== 1 ? 's' : ''}
+                  {positiveList.length} trait{positiveList.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              {positiveEntries.length === 0 ? (
+              {positiveList.length === 0 ? (
                 <p className="text-xs text-navy-900/60 font-mono italic">
                   {consensusData?.is_wildcard ? 'Wildcard mode: Equal weighting across all cuisines' : 'No positive weights recorded.'}
                 </p>
               ) : (
                 <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {positiveEntries.map(([trait, weight]) => {
-                    const maxWeight = Math.max(...Object.values(positiveWeights), 1)
-                    const percent = Math.min(100, Math.round((weight / maxWeight) * 100))
+                  {positiveList.map((item, idx) => {
+                    const percent = Math.min(100, Math.round((item.weight / maxPositiveWeight) * 100))
                     return (
-                      <div key={trait} className="flex items-center gap-2 text-xs">
-                        <span className="w-24 font-bold font-mono capitalize truncate">{trait}</span>
+                      <div key={idx} className="flex items-center gap-2 text-xs">
+                        <span className="w-28 font-bold font-mono capitalize truncate">{item.trait}</span>
                         <div className="flex-1 bg-navy-900/10 h-3 rounded-full overflow-hidden border border-navy-900/20">
                           <div
                             className="bg-green-400 h-full rounded-full transition-all duration-300"
@@ -208,7 +275,7 @@ function WeightsInspector({ consensusData, members }) {
                           />
                         </div>
                         <span className="w-14 text-right font-mono font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-300">
-                          +{Number(weight).toFixed(1)}
+                          +{Number(item.weight).toFixed(1)}
                         </span>
                       </div>
                     )
@@ -225,34 +292,34 @@ function WeightsInspector({ consensusData, members }) {
                   Dietary Restrictions & Strict Vetoes
                 </div>
                 <span className="text-[11px] font-mono text-navy-900/60 font-bold">
-                  {vetoes.length} active
+                  {vetoList.length} active
                 </span>
               </div>
-              {vetoes.length === 0 ? (
+              {vetoList.length === 0 ? (
                 <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-xs font-bold text-green-800 flex items-center gap-2">
                   <CheckCircle2 size={16} className="text-green-600 shrink-0" />
                   <span>No allergies or strict vetoes active for this round.</span>
                 </div>
               ) : (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {vetoes.map((item, idx) => (
+                  {vetoList.map((item, idx) => (
                     <div
                       key={idx}
                       className="flex items-center justify-between bg-red-50 border border-red-300 px-2.5 py-1.5 rounded-lg text-xs"
                     >
-                      <span className="font-bold text-red-900 capitalize">{item}</span>
+                      <span className="font-bold text-red-900 capitalize">{item.trait}</span>
                       <span className="font-mono font-bold text-[10px] text-red-700 bg-red-200 px-2 py-0.5 rounded uppercase">
-                        Strict Veto (-999.0)
+                        {item.isAllergy ? 'Allergy Veto (-999)' : 'Strict Veto (-999)'}
                       </span>
                     </div>
                   ))}
                 </div>
               )}
-              {midpoint && (
+              {midpoint && typeof midpoint.lat === 'number' && typeof midpoint.lng === 'number' && (
                 <div className="mt-3 pt-3 border-t border-navy-900/10 text-[11px] font-mono text-navy-900/70 flex items-center justify-between">
                   <span>Group Midpoint:</span>
                   <span className="font-bold text-navy-900">
-                    {Number(midpoint.lat).toFixed(4)}, {Number(midpoint.lng).toFixed(4)}
+                    {midpoint.lat.toFixed(4)}, {midpoint.lng.toFixed(4)}
                   </span>
                 </div>
               )}
@@ -269,6 +336,9 @@ function WeightsInspector({ consensusData, members }) {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                 {members.map((member) => {
                   const prefs = member.preferences
+                  const cravings = prefs?.desired_cuisines || prefs?.cuisines || []
+                  const vetoed = prefs?.vetoed_cuisines || []
+                  const allergies = prefs?.allergies || []
                   return (
                     <div
                       key={member.id}
@@ -285,19 +355,19 @@ function WeightsInspector({ consensusData, members }) {
                           <div className="text-[11px]">
                             <span className="font-mono text-navy-900/60 uppercase text-[10px]">Cravings: </span>
                             <span className="font-bold text-green-700">
-                              {prefs?.cuisines?.length > 0 ? prefs.cuisines.join(', ') : 'None / Wildcard'}
+                              {cravings.length > 0 ? cravings.join(', ') : 'None / Wildcard'}
                             </span>
                           </div>
-                          {prefs?.vetoed_cuisines?.length > 0 && (
+                          {vetoed.length > 0 && (
                             <div className="text-[11px]">
                               <span className="font-mono text-navy-900/60 uppercase text-[10px]">Vetoed: </span>
-                              <span className="font-bold text-red-600">{prefs.vetoed_cuisines.join(', ')}</span>
+                              <span className="font-bold text-red-600">{vetoed.join(', ')}</span>
                             </div>
                           )}
-                          {prefs?.allergies?.length > 0 && (
+                          {allergies.length > 0 && (
                             <div className="text-[11px]">
                               <span className="font-mono text-navy-900/60 uppercase text-[10px]">Allergies: </span>
-                              <span className="font-bold text-red-700">{prefs.allergies.join(', ')}</span>
+                              <span className="font-bold text-red-700">{allergies.join(', ')}</span>
                             </div>
                           )}
                         </div>
@@ -331,14 +401,18 @@ function WeightsInspector({ consensusData, members }) {
                         <span className="text-xs font-bold text-orange-600">({cand.price || '$$'})</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        {cand.matched_traits?.map((item, tIdx) => (
-                          <span
-                            key={tIdx}
-                            className="bg-green-100 text-green-800 border border-green-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
-                          >
-                            ✓ {item.trait} (+{Number(item.weight).toFixed(1)})
-                          </span>
-                        ))}
+                        {Array.isArray(cand.matched_traits) && cand.matched_traits.map((item, tIdx) => {
+                          const traitName = typeof item === 'object' ? item.trait || item.name : String(item)
+                          const traitWeight = typeof item === 'object' && item.weight != null ? item.weight : null
+                          return (
+                            <span
+                              key={tIdx}
+                              className="bg-green-100 text-green-800 border border-green-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
+                            >
+                              ✓ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
+                            </span>
+                          )
+                        })}
                         {(!cand.matched_traits || cand.matched_traits.length === 0) && (
                           <span className="text-[10px] font-mono text-navy-900/50">Base distance match</span>
                         )}
@@ -346,7 +420,7 @@ function WeightsInspector({ consensusData, members }) {
                     </div>
                     <div className="flex flex-col md:items-end justify-center shrink-0">
                       <div className="font-mono font-bold text-xs bg-navy-900 text-white px-2 py-1 rounded-lg">
-                        Final Score: {Number(cand.final_score).toFixed(2)} pts
+                        Final Score: {Number(cand.final_score || 0).toFixed(2)} pts
                       </div>
                       <div className="font-mono text-[10px] text-navy-900/70 mt-1">
                         {cand.formula || `+${cand.match_score} match - ${cand.distance_penalty} dist`}
@@ -1065,14 +1139,18 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                 {/* Matched Traits Chips */}
                 {restaurant._debug_stats?.matched_traits && restaurant._debug_stats.matched_traits.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-2">
-                    {restaurant._debug_stats.matched_traits.map((t, tIdx) => (
-                      <span
-                        key={tIdx}
-                        className="bg-green-100 text-green-900 border border-green-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md"
-                      >
-                        ★ {t.trait} (+{Number(t.weight).toFixed(1)})
-                      </span>
-                    ))}
+                    {restaurant._debug_stats.matched_traits.map((t, tIdx) => {
+                      const traitName = typeof t === 'object' ? t.trait || t.name : String(t)
+                      const traitWeight = typeof t === 'object' && t.weight != null ? t.weight : null
+                      return (
+                        <span
+                          key={tIdx}
+                          className="bg-green-100 text-green-900 border border-green-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md"
+                        >
+                          ★ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
+                        </span>
+                      )
+                    })}
                   </div>
                 )}
 
@@ -1183,14 +1261,18 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                 {/* Winner Matched Traits */}
                 {winner?._debug_stats?.matched_traits && winner._debug_stats.matched_traits.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
-                    {winner._debug_stats.matched_traits.map((t, tIdx) => (
-                      <span
-                        key={tIdx}
-                        className="bg-green-100 text-green-900 border border-green-300 text-xs font-mono font-bold px-2 py-0.5 rounded-md"
-                      >
-                        ★ {t.trait} (+{Number(t.weight).toFixed(1)})
-                      </span>
-                    ))}
+                    {winner._debug_stats.matched_traits.map((t, tIdx) => {
+                      const traitName = typeof t === 'object' ? t.trait || t.name : String(t)
+                      const traitWeight = typeof t === 'object' && t.weight != null ? t.weight : null
+                      return (
+                        <span
+                          key={tIdx}
+                          className="bg-green-100 text-green-900 border border-green-300 text-xs font-mono font-bold px-2 py-0.5 rounded-md"
+                        >
+                          ★ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
+                        </span>
+                      )
+                    })}
                   </div>
                 )}
                 {winner?._debug_stats && (
@@ -1414,5 +1496,9 @@ export default function App() {
     setSession(null)
   }, [])
 
-  return session ? <LobbyScreen session={session} onLeave={leaveLobby} /> : <EntryScreen onJoin={joinLobby} />
+  return (
+    <ErrorBoundary>
+      {session ? <LobbyScreen session={session} onLeave={leaveLobby} /> : <EntryScreen onJoin={joinLobby} />}
+    </ErrorBoundary>
+  )
 }
