@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import secrets
 import string
 import time
@@ -11,6 +12,8 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from fastapi import WebSocket
+
+logger = logging.getLogger(__name__)
 
 
 MAX_MEMBERS = 12
@@ -168,9 +171,16 @@ class LobbyManager:
             if any(item.preferences is None for item in lobby.members.values()):
                 raise LobbyError("PREFERENCES_INCOMPLETE", "All members must submit preferences before voting starts.")
             preferences = [item.preferences for item in lobby.members.values() if item.preferences]
-            candidates = self._recommend(preferences, lobby.location)
+            try:
+                candidates = self._recommend(preferences, lobby.location)
+            except LobbyError:
+                raise
+            except Exception as exc:
+                logger.error("Error during restaurant recommendation: %s", exc, exc_info=True)
+                raise LobbyError("PLACES_API_ERROR", f"Could not find restaurants: {str(exc)}", 502) from exc
+
             if not candidates:
-                raise LobbyError("NO_MATCHES", "No sample restaurants match these preferences. Adjust them and try again.")
+                raise LobbyError("NO_MATCHES", "No restaurants match the group's preferences. Adjust cravings or price and try again.")
             lobby.candidates = candidates
             lobby.phase = "voting"
             lobby.votes_expected = set(lobby.members)
@@ -220,6 +230,25 @@ class LobbyManager:
         for member_id, socket in destinations:
             try:
                 await asyncio.wait_for(socket.send_json({"type": "lobby_state", "payload": state}), timeout=3)
+            except Exception:
+                failed.append((member_id, socket))
+        for member_id, socket in failed:
+            await self.disconnect(lobby, member_id, socket)
+
+    async def broadcast_error(self, lobby: Lobby, error: LobbyError) -> None:
+        """Broadcasts a user-friendly error payload to all connected lobby sockets without closing connections."""
+        async with lobby.lock:
+            destinations = list(lobby.sockets.items())
+        failed: list[tuple[str, WebSocket]] = []
+        for member_id, socket in destinations:
+            try:
+                await asyncio.wait_for(
+                    socket.send_json({
+                        "type": "error",
+                        "payload": {"code": error.code, "message": error.message}
+                    }),
+                    timeout=3
+                )
             except Exception:
                 failed.append((member_id, socket))
         for member_id, socket in failed:

@@ -47,71 +47,129 @@ def calculate_geographic_midpoint(locations: List[Dict[str, float]], fallback: O
     return {"lat": round(avg_lat, 6), "lng": round(avg_lng, 6)}
 
 
+# Google Places API (New) Price Level Mapping
+PRICE_MAP: Dict[str, str] = {
+    "PRICE_LEVEL_FREE": "$",
+    "PRICE_LEVEL_INEXPENSIVE": "$",
+    "PRICE_LEVEL_MODERATE": "$$",
+    "PRICE_LEVEL_EXPENSIVE": "$$$",
+    "PRICE_LEVEL_VERY_EXPENSIVE": "$$$$",
+    "$": "$",
+    "$$": "$$",
+    "$$$": "$$$",
+    "$$$$": "$$$$",
+}
+
+IGNORED_PLACE_TYPES = {
+    "point_of_interest",
+    "establishment",
+    "food",
+    "restaurant",
+    "store",
+}
+
+
+def format_cuisine_type(place_type: str) -> str:
+    """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican')."""
+    name = place_type.lower()
+    for suffix in ["_restaurant", "_food", "_store"]:
+        if name.endswith(suffix):
+            name = name[:-len(suffix)]
+    words = name.replace("_", " ").split()
+    return " ".join(w.capitalize() for w in words)
+
+
+def extract_cuisines(types: List[str]) -> List[str]:
+    """Filters generic place types and extracts readable cuisine names."""
+    cuisines: List[str] = []
+    for t in types:
+        t_clean = str(t).strip().lower()
+        if t_clean not in IGNORED_PLACE_TYPES:
+            formatted = format_cuisine_type(t_clean)
+            if formatted and formatted not in cuisines:
+                cuisines.append(formatted)
+    return cuisines if cuisines else ["Restaurant"]
+
+
 def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000) -> List[Dict[str, Any]]:
     """
-    Fetches real-time restaurant data using the Yelp Fusion API based on the group's geographic midpoint.
-    Strictly filters for restaurants that are currently OPEN (open_now=true).
-    Parses and maps the response strictly to the system API contract:
+    Fetches real-time restaurant data using the Google Places API (New) Nearby Search
+    (POST to https://places.googleapis.com/v1/places:searchNearby).
+    Includes mandatory X-Goog-FieldMask and X-Goog-Api-Key headers.
+    Maps response strictly to the system API contract:
     id, name, price, cuisines, coordinates, image_url, address.
     """
-    api_key = os.getenv("YELP_API_KEY", "").strip()
+    api_key = (
+        os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+        or os.getenv("PLACES_API_KEY", "").strip()
+    )
     if not api_key:
-        raise RuntimeError("YELP_API_KEY is not set in backend/.env. Please configure your Yelp Fusion API key.")
+        raise RuntimeError("GOOGLE_PLACES_API_KEY is not set in backend/.env. Please configure your Google Places API key.")
 
-    params = {
-        "latitude": location.get("lat", 28.5383),
-        "longitude": location.get("lng", -81.3792),
-        "radius": min(radius_meters, 40000),
-        "categories": "restaurants,food",
-        "open_now": "true",  # Real-time requirement: only currently open businesses
-        "limit": 50,
-        "sort_by": "best_match",
-    }
-    url = f"https://api.yelp.com/v3/businesses/search?{urllib.parse.urlencode(params)}"
+    url = "https://places.googleapis.com/v1/places:searchNearby"
     headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Accept": "application/json",
-        "User-Agent": "FoodFinder/1.0",
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
     }
 
-    req = urllib.request.Request(url, headers=headers)
+    body = {
+        "includedTypes": ["restaurant"],
+        "maxResultCount": 20,
+        "locationRestriction": {
+            "circle": {
+                "center": {
+                    "latitude": float(location.get("lat", 28.5383)),
+                    "longitude": float(location.get("lng", -81.3792)),
+                },
+                "radius": min(float(radius_meters), 50000.0),
+            }
+        },
+    }
+
+    req_data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
+
     try:
-        with urllib.request.urlopen(req, timeout=8) as response:
+        with urllib.request.urlopen(req, timeout=10) as response:
             payload = json.loads(response.read().decode("utf-8"))
-            businesses = payload.get("businesses", [])
+            places = payload.get("places", [])
             live_results: List[Dict[str, Any]] = []
 
-            for b in businesses:
-                if b.get("is_closed", False):
+            for p in places:
+                place_id = str(p.get("id") or "")
+                if not place_id:
                     continue
 
-                # Map price string (defaulting to $$ if not provided by Yelp)
-                price = str(b.get("price") or "$$")
+                display_name_obj = p.get("displayName") or {}
+                name = str(display_name_obj.get("text") or "Unknown Restaurant")
 
-                # Map cuisine category titles
-                cuisines = [
-                    str(cat.get("title", ""))
-                    for cat in b.get("categories", [])
-                    if cat.get("title")
-                ]
+                raw_price = p.get("priceLevel") or "PRICE_LEVEL_MODERATE"
+                price = PRICE_MAP.get(str(raw_price), "$$")
 
-                # Map coordinates
-                b_coords = b.get("coordinates") or {}
+                raw_types = p.get("types") or []
+                cuisines = extract_cuisines(raw_types)
+
+                loc = p.get("location") or {}
                 coords = {
-                    "lat": float(b_coords.get("latitude") or location.get("lat", 28.5383)),
-                    "lng": float(b_coords.get("longitude") or location.get("lng", -81.3792)),
+                    "lat": float(loc.get("latitude") or location.get("lat", 28.5383)),
+                    "lng": float(loc.get("longitude") or location.get("lng", -81.3792)),
                 }
 
-                # Human-readable display address
-                address_parts = b.get("location", {}).get("display_address", [])
-                address = ", ".join(address_parts) if address_parts else "Address unavailable"
+                address = str(p.get("formattedAddress") or "Address unavailable")
 
-                # Image URL
-                image_url = str(b.get("image_url") or DEFAULT_IMAGE)
+                photos = p.get("photos") or []
+                image_url = DEFAULT_IMAGE
+                if isinstance(photos, list) and photos:
+                    first_photo = photos[0]
+                    if isinstance(first_photo, dict) and first_photo.get("name"):
+                        photo_name = first_photo["name"]
+                        image_url = f"https://places.googleapis.com/v1/{photo_name}/media?key={api_key}&maxHeightPx=1000&maxWidthPx=1000"
 
                 live_results.append({
-                    "id": str(b.get("id")),
-                    "name": str(b.get("name", "Unknown Restaurant")),
+                    "id": place_id,
+                    "name": name,
                     "price": price,
                     "cuisines": cuisines,
                     "coordinates": coords,
@@ -121,15 +179,28 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
                 })
 
             if not live_results:
-                logger.warning("Yelp API returned 0 open restaurants for coordinates %s", location)
+                logger.warning("Google Places API returned 0 restaurants for coordinates %s", location)
             return live_results
 
     except urllib.error.HTTPError as err:
-        logger.error("Yelp API HTTP error %d: %s", err.code, err.reason)
-        raise RuntimeError(f"Yelp Fusion API returned error {err.code}: {err.reason}") from err
+        err_body = ""
+        try:
+            err_body = err.read().decode("utf-8")
+        except Exception:
+            pass
+        logger.error("Google Places API HTTP error %d: %s (%s)", err.code, err.reason, err_body)
+        err_detail = err.reason
+        if err_body:
+            try:
+                parsed = json.loads(err_body)
+                if "error" in parsed and "message" in parsed["error"]:
+                    err_detail = parsed["error"]["message"]
+            except Exception:
+                pass
+        raise RuntimeError(f"Google Places API returned error {err.code}: {err_detail}") from err
     except Exception as exc:
-        logger.error("Failed to connect to Yelp Fusion API: %s", exc)
-        raise RuntimeError(f"Failed to query Yelp Fusion API: {exc}") from exc
+        logger.error("Failed to connect to Google Places API: %s", exc)
+        raise RuntimeError(f"Failed to query Google Places API: {exc}") from exc
 
 
 def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str, float]:
@@ -273,7 +344,7 @@ def recommend_restaurants(
     mood_requests: List[Dict[str, Any]], group_location: Dict[str, float]
 ) -> List[Dict[str, Any]]:
     """
-    Executes live Yelp Fusion restaurant discovery at the geographic midpoint,
+    Executes live Google Places API (New) restaurant discovery at the geographic midpoint,
     applies group constraints (price, vetoes, allergies), and scores candidates using
     the anti-hallucination consensus algorithm.
     """
@@ -295,7 +366,7 @@ def recommend_restaurants(
     ]
     is_wildcard = (len(all_desired) == 0) or all(c == "anything" for c in all_desired)
 
-    # Fetch live Yelp Fusion restaurants filtered for currently OPEN status
+    # Fetch live Google Places API (New) restaurants
     raw_restaurants = fetch_live_restaurants(location=midpoint)
 
     vetoes = {

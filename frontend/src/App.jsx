@@ -31,6 +31,42 @@ function handleOpenDirections(restaurant) {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+function ErrorToast({ message, onClose }) {
+  useEffect(() => {
+    if (!message) return
+    const timer = setTimeout(() => {
+      onClose?.()
+    }, 8000)
+    return () => clearTimeout(timer)
+  }, [message, onClose])
+
+  if (!message) return null
+
+  return (
+    <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-lg transition-all animate-bounce-in">
+      <div className="bg-red-50 border-2 border-red-600 text-navy-900 rounded-2xl p-4 shadow-[4px_4px_0px_0px_rgba(220,38,38,1)] flex items-start gap-3">
+        <AlertCircle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+        <div className="flex-1 min-w-0">
+          <div className="font-bold text-xs uppercase font-mono tracking-wider text-red-600 mb-0.5">
+            Notice / Error
+          </div>
+          <div className="text-xs sm:text-sm font-bold text-navy-900 break-words">
+            {message}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-red-600 hover:text-navy-900 hover:bg-red-100 rounded-lg p-1 text-sm font-bold shrink-0 transition-colors"
+          title="Dismiss"
+        >
+          ✕
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // -------------------------------------------------------------
 // SCREEN 1: HOME / ENTRY SCREEN (Mobile-First)
 // -------------------------------------------------------------
@@ -183,7 +219,7 @@ function EntryScreen({ onJoin }) {
 // -------------------------------------------------------------
 // SCREEN 2: LOBBY SCREEN (Preferences Phase - Allergies & Unlock)
 // -------------------------------------------------------------
-function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
+function PreferencesScreen({ lobby, session, connection, send, onLeave, error, clearError }) {
   const [selectedPrice, setSelectedPrice] = useState('$$')
   const [selectedCuisines, setSelectedCuisines] = useState([])
   const [selectedAllergies, setSelectedAllergies] = useState([])
@@ -505,6 +541,20 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
 
           {/* Action Buttons & Unlock Choices */}
           <div className="mt-8 pt-4 border-t-2 border-navy-900/10">
+            {error && (
+              <div className="mb-4 p-4 bg-red-50 border-2 border-red-500 rounded-xl flex items-start gap-3 text-red-900 shadow-[2px_2px_0px_0px_rgba(239,68,68,1)]">
+                <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
+                <div className="flex-1 text-xs sm:text-sm font-bold">{error}</div>
+                <button
+                  type="button"
+                  onClick={clearError}
+                  className="text-red-600 hover:text-navy-900 font-bold px-1.5 py-0.5 rounded text-sm"
+                  title="Dismiss"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             {isHost && submittedCount === totalCount ? (
               <button
                 type="button"
@@ -585,7 +635,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
 // -------------------------------------------------------------
 // SCREEN 3: GAME / VOTING SCREEN (Change Votes & Weights Transparency)
 // -------------------------------------------------------------
-function VotingScreen({ lobby, session, connection, send }) {
+function VotingScreen({ lobby, session, connection, send, error, clearError }) {
   const [votedId, setVotedId] = useState(null)
   const canAct = connection === 'connected'
   const isHost = lobby?.host_id === session.memberId
@@ -633,6 +683,21 @@ function VotingScreen({ lobby, session, connection, send }) {
           Tap to vote. You can tap another option at any time to change your vote!
         </p>
       </div>
+
+      {error && (
+        <div className="max-w-4xl mx-auto mb-6 p-4 bg-red-50 border-2 border-red-500 rounded-2xl flex items-start gap-3 text-red-900 shadow-[4px_4px_0px_0px_rgba(239,68,68,1)]">
+          <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
+          <div className="flex-1 text-xs sm:text-sm font-bold">{error}</div>
+          <button
+            type="button"
+            onClick={clearError}
+            className="text-red-600 hover:text-navy-900 font-bold px-1.5 py-0.5 rounded text-sm"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
         {candidates.map((restaurant, idx) => {
@@ -927,34 +992,37 @@ function LobbyScreen({ session, onLeave }) {
 
   const activeResults = (lobby?.phase === 'results' && lobby?.winner) ? lobby : persistedResults
 
-  if (activeResults) {
-    return <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} />
-  }
-
-  if (!lobby) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
-        <h1 className="text-3xl font-bold mb-2">Joining room...</h1>
-        <p className="text-navy-900/60">
-          {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}
-        </p>
-        {error && <p className="text-red-500 mt-4 font-bold">{error}</p>}
-      </div>
-    )
-  }
-
-  if (lobby.phase === 'voting') {
-    return <VotingScreen lobby={lobby} session={session} connection={connection} send={send} />
-  }
-
   return (
-    <PreferencesScreen
-      lobby={lobby}
-      session={session}
-      connection={connection}
-      send={send}
-      onLeave={onLeave}
-    />
+    <>
+      <ErrorToast message={error} onClose={clearError} />
+      {activeResults ? (
+        <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} error={error} clearError={clearError} />
+      ) : !lobby ? (
+        <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
+          <h1 className="text-3xl font-bold mb-2">Joining room...</h1>
+          <p className="text-navy-900/60">
+            {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}
+          </p>
+          {error && (
+            <div className="mt-4 p-4 bg-red-100 border-2 border-red-500 rounded-xl text-red-700 text-sm font-bold max-w-md text-center">
+              {error}
+            </div>
+          )}
+        </div>
+      ) : lobby.phase === 'voting' ? (
+        <VotingScreen lobby={lobby} session={session} connection={connection} send={send} error={error} clearError={clearError} />
+      ) : (
+        <PreferencesScreen
+          lobby={lobby}
+          session={session}
+          connection={connection}
+          send={send}
+          onLeave={onLeave}
+          error={error}
+          clearError={clearError}
+        />
+      )}
+    </>
   )
 }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
@@ -11,6 +12,8 @@ from pydantic import BaseModel, Field, ValidationError, field_validator
 
 import engine
 from lobbies import LobbyError, LobbyManager, parse_message
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_LOCATION = {"lat": 28.5383, "lng": -81.3792}
 PRICE_VALUES = {"$", "$$", "$$$", "$$$$"}
@@ -117,7 +120,19 @@ def health_check():
 @app.post("/api/recommend")
 def get_recommendations(payload: GroupRequest):
     requests = [request.model_dump() for request in payload.mood_requests]
-    return {"status": "success", "consensus_vector": engine.calculate_consensus_vector(requests), "winners": recommend(requests, payload.group_location.model_dump())}
+    try:
+        winners = recommend(requests, payload.group_location.model_dump())
+        return {
+            "status": "success",
+            "consensus_vector": engine.calculate_consensus_vector(requests),
+            "winners": winners,
+        }
+    except Exception as exc:
+        logger.error("Error generating recommendations: %s", exc, exc_info=True)
+        raise HTTPException(
+            status_code=502,
+            detail={"code": "PLACES_API_ERROR", "message": f"Could not find restaurants: {str(exc)}"},
+        ) from exc
 
 
 @app.post("/api/lobbies")
@@ -199,7 +214,17 @@ async def lobby_socket(socket: WebSocket, code: str):
             except ValidationError as error:
                 await send_error(socket, LobbyError("INVALID_PAYLOAD", error.errors()[0]["msg"]))
             except LobbyError as error:
-                await send_error(socket, error)
+                if event_type == "start_voting" and lobby is not None:
+                    await manager.broadcast_error(lobby, error)
+                else:
+                    await send_error(socket, error)
+            except Exception as error:
+                logger.error("Unexpected error in websocket event loop for event '%s': %s", event_type, error, exc_info=True)
+                err = LobbyError("PLACES_API_ERROR" if event_type == "start_voting" else "SERVER_ERROR", f"Action failed: {str(error)}")
+                if event_type == "start_voting" and lobby is not None:
+                    await manager.broadcast_error(lobby, err)
+                else:
+                    await send_error(socket, err)
     except WebSocketDisconnect:
         pass
     finally:
