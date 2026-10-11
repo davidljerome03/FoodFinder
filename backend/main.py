@@ -105,6 +105,12 @@ class RemoveMemberPayload(BaseModel):
     member_id: Annotated[str, Field(min_length=1, max_length=100)]
 
 
+class PlayAgainRequest(BaseModel):
+    member_token: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Optional[Annotated[str, Field(min_length=1, max_length=50)]] = None
+    location: Optional[Location] = None
+
+
 Location.model_rebuild()
 NameRequest.model_rebuild()
 CreateLobbyRequest.model_rebuild()
@@ -113,6 +119,7 @@ UserPreference.model_rebuild()
 GroupRequest.model_rebuild()
 VotePayload.model_rebuild()
 RemoveMemberPayload.model_rebuild()
+PlayAgainRequest.model_rebuild()
 
 
 def recommend(preferences: list[dict[str, Any]], location: dict[str, float]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
@@ -216,6 +223,22 @@ async def join_lobby(code: str, payload: JoinLobbyRequest):
         clean_code = "".join(ch for ch in code.strip().upper() if ch.isalnum())
         loc_dict = payload.location.model_dump() if payload.location else None
         lobby, member = await manager.join_lobby(clean_code, payload.name, location=loc_dict)
+    except LobbyError as error:
+        raise HTTPException(error.status_code, detail={"code": error.code, "message": error.message}) from error
+    return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}
+
+
+@app.post("/api/lobbies/{code}/play-again")
+async def play_again_endpoint(code: str, payload: PlayAgainRequest):
+    try:
+        clean_code = "".join(ch for ch in code.strip().upper() if ch.isalnum())
+        loc_dict = payload.location.model_dump() if payload.location else None
+        lobby, member = await manager.play_again(
+            clean_code,
+            payload.member_token,
+            name=payload.name,
+            location=loc_dict,
+        )
     except LobbyError as error:
         raise HTTPException(error.status_code, detail={"code": error.code, "message": error.message}) from error
     return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}

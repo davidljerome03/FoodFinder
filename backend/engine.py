@@ -877,6 +877,24 @@ def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str,
     return vector
 
 
+def calculate_distance_penalty(distance_miles: float) -> float:
+    """
+    Calculates a balanced distance penalty that gives closer places a strong,
+    noticeable advantage while not trumping high-consensus or unique recommended places
+    farther out.
+    - 0 to 2 miles: 0.45 points / mile (nearby options get strong priority)
+    - 2 to 5 miles: 0.30 points / mile (moderate penalty for reasonable driving distance)
+    - 5+ miles: 0.20 points / mile (gentle plateau so strong recommendations aren't eliminated)
+    """
+    d = max(0.0, float(distance_miles))
+    if d <= 2.0:
+        return d * 0.45
+    elif d <= 5.0:
+        return 0.90 + (d - 2.0) * 0.30
+    else:
+        return 1.80 + (d - 5.0) * 0.20
+
+
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculates the distance in miles between two coordinates."""
     R = 3958.8  # Radius of earth in miles
@@ -979,12 +997,12 @@ def score_restaurants(
                     allergy_penalty += 2.5
                     conflicted_allergies.append(format_cuisine_type(a_clean))
 
-        # 3. Distance Penalty (0.25 points per mile away from midpoint)
+        # 3. Distance Penalty (Balanced weighting: gives closer places a strong edge without trumping distant recommendations)
         coords = extract_coords(rest.get("coordinates"), group_location)
         rest_lat = coords["lat"]
         rest_lng = coords["lng"]
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
-        distance_penalty = distance * 0.25
+        distance_penalty = calculate_distance_penalty(distance)
         final_score = dot_product_score - allergy_penalty - distance_penalty
 
         formula_parts = [f"+{dot_product_score:.2f} (Match)"]

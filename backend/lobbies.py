@@ -51,6 +51,8 @@ class Lobby:
     consensus_data: dict[str, Any] | None = None
     votes_expected: set[str] = field(default_factory=set)
     winner: dict[str, Any] | None = None
+    next_lobby_code: str | None = None
+    next_lobby_members: dict[str, Member] = field(default_factory=dict)
     last_empty_at: float | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -176,9 +178,8 @@ class LobbyManager:
                 if lobby.votes_expected and all(lobby.members[mid].vote for mid in lobby.votes_expected if mid in lobby.members):
                     self._finish(lobby)
             elif lobby.phase == "results":
-                # Post-Game Room Stability: Keep completed results intact
-                if member_id in lobby.members:
-                    del lobby.members[member_id]
+                # Post-Game Room Stability: Keep completed results and crew intact
+                pass
 
             return True, self._state(lobby)
 
@@ -370,6 +371,7 @@ class LobbyManager:
         votes_submitted = sum(1 for member_id in lobby.votes_expected if lobby.members[member_id].vote)
         return {
             "lobby_code": lobby.code,
+            "next_lobby_code": lobby.next_lobby_code,
             "phase": lobby.phase,
             "host_id": lobby.host_id,
             "group_location": lobby.location,
@@ -391,6 +393,69 @@ class LobbyManager:
             "vote_totals": self._vote_totals(lobby) if lobby.phase == "results" else {},
             "winner": lobby.winner,
         }
+
+    async def play_again(
+        self,
+        code: str,
+        token: str,
+        name: str | None = None,
+        location: dict[str, float] | None = None,
+    ) -> tuple[Lobby, Member]:
+        old_lobby = await self.get_lobby(code)
+        broadcast_state = None
+        async with old_lobby.lock:
+            old_member = next(
+                (item for item in old_lobby.members.values() if secrets.compare_digest(item.token, token)),
+                None,
+            )
+            if old_member is None:
+                raise LobbyError("INVALID_TOKEN", "The lobby membership token is invalid.", 403)
+
+            member_name = (name.strip() if name and name.strip() else None) or old_member.name
+            member_location = location or old_member.location or old_lobby.location
+
+            # If this member already transitioned to the new lobby, return that existing member
+            if old_lobby.next_lobby_code and old_member.id in old_lobby.next_lobby_members:
+                target_code = old_lobby.next_lobby_code
+                async with self._lobbies_lock:
+                    target_lobby = self._lobbies.get(target_code)
+                existing_member = old_lobby.next_lobby_members[old_member.id]
+                if target_lobby is not None and existing_member.id in target_lobby.members:
+                    return target_lobby, existing_member
+
+            target_lobby = None
+            if old_lobby.next_lobby_code:
+                async with self._lobbies_lock:
+                    target_lobby = self._lobbies.get(old_lobby.next_lobby_code)
+
+            if target_lobby is None:
+                # First player to click Play Again creates the new room with old lobby's group location
+                target_lobby, new_member = await self.create_lobby(
+                    name=member_name,
+                    location=old_lobby.location,
+                )
+                if location:
+                    new_member.location = location
+                old_lobby.next_lobby_code = target_lobby.code
+                old_lobby.next_lobby_members[old_member.id] = new_member
+                broadcast_state = self._state(old_lobby)
+            else:
+                async with target_lobby.lock:
+                    if len(target_lobby.members) >= MAX_MEMBERS:
+                        raise LobbyError("LOBBY_FULL", "The new lobby is already full.", 409)
+                    # Check if a member with this name already joined
+                    existing = next((m for m in target_lobby.members.values() if m.name == member_name), None)
+                    if existing:
+                        new_member = existing
+                    else:
+                        new_member = self._new_member(member_name, is_host=False, location=member_location)
+                        target_lobby.members[new_member.id] = new_member
+                old_lobby.next_lobby_members[old_member.id] = new_member
+
+        if broadcast_state is not None:
+            await self.broadcast(old_lobby, broadcast_state)
+
+        return target_lobby, new_member
 
 
 def parse_message(raw: str) -> tuple[str, dict[str, Any]]:

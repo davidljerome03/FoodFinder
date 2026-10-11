@@ -1362,17 +1362,53 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
 // -------------------------------------------------------------
 // SCREEN 4: WINNER / RESULTS SCREEN (Podium + Google Maps Deep Link)
 // -------------------------------------------------------------
-function ResultsScreen({ lobby, session, onLeave, send }) {
+function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
   const winner = lobby?.winner
   const candidates = lobby?.candidates || []
   const totalCount = lobby?.members?.length || 0
   const winnerImage = winner?.image_url || winner?.image || fallbackImage
+  const [playAgainLoading, setPlayAgainLoading] = useState(false)
+  const [playAgainError, setPlayAgainError] = useState('')
 
-  // Isolate Play Again State:
-  // Clicking Play Again safely resets ONLY the local client state and disconnects this user.
-  // It does NOT emit a global room reset, allowing remaining users to continue viewing the winner.
-  const handlePlayAgain = () => {
-    onLeave()
+  // Shared Room Play Again:
+  // The first player to click Play Again initiates the new room.
+  // Subsequent players who click Play Again automatically join that exact same room to set new preferences.
+  const handlePlayAgain = async () => {
+    if (playAgainLoading) return
+    setPlayAgainLoading(true)
+    setPlayAgainError('')
+    try {
+      const response = await fetch(`/api/lobbies/${encodeURIComponent(lobby.lobby_code)}/play-again`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          member_token: session.memberToken,
+          name: session.name,
+          location: session.location || lobby.group_location,
+        }),
+      })
+      let data = null
+      try {
+        data = await response.json()
+      } catch {
+        data = null
+      }
+      if (!response.ok) {
+        throw new Error(data?.detail?.message || 'Could not start new round. Please try again.')
+      }
+      onPlayAgain?.({
+        lobbyCode: data.lobby_code,
+        memberId: data.member_id,
+        memberToken: data.member_token,
+        name: session.name,
+        location: session.location || lobby.group_location,
+      })
+    } catch (err) {
+      console.error('Play Again failed:', err)
+      setPlayAgainError(err.message || 'Failed to start new round')
+    } finally {
+      setPlayAgainLoading(false)
+    }
   }
 
   return (
@@ -1485,6 +1521,21 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
               <Navigation size={28} />
             </button>
 
+            {lobby.next_lobby_code && (
+              <div className="w-full text-center pt-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-900 border border-green-500 rounded-full font-mono text-xs font-bold animate-pulse">
+                  <CheckCircle2 size={13} className="text-green-600" />
+                  New round started in Room {lobby.next_lobby_code}! Click Play Again to join.
+                </span>
+              </div>
+            )}
+
+            {playAgainError && (
+              <div className="w-full text-center text-xs text-red-600 font-bold font-mono">
+                {playAgainError}
+              </div>
+            )}
+
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-2 text-xs font-mono font-bold tracking-widest uppercase text-navy-900/70">
               <button
                 type="button"
@@ -1497,9 +1548,17 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
               <button
                 type="button"
                 onClick={handlePlayAgain}
-                className="hover:text-navy-900 flex items-center gap-1.5 px-4 py-2 bg-green-400 border-2 border-navy-900 rounded-xl shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px]"
+                disabled={playAgainLoading}
+                className="hover:text-navy-900 flex items-center gap-1.5 px-4 py-2 bg-green-400 border-2 border-navy-900 rounded-xl shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-50"
               >
-                <RotateCcw size={14} /> Play Again (New Round)
+                <RotateCcw size={14} className={playAgainLoading ? "animate-spin" : ""} />
+                {playAgainLoading ? (
+                  <span>Entering New Room...</span>
+                ) : lobby.next_lobby_code ? (
+                  <span>Play Again (Join Room {lobby.next_lobby_code})</span>
+                ) : (
+                  <span>Play Again (New Round)</span>
+                )}
               </button>
             </div>
           </div>
@@ -1606,7 +1665,7 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
 // -------------------------------------------------------------
 // MAIN CONTAINER (Decoupled Post-Game Room Stability)
 // -------------------------------------------------------------
-function LobbyScreen({ session, onLeave }) {
+function LobbyScreen({ session, onLeave, onPlayAgain }) {
   const [persistedResults, setPersistedResults] = useState(null)
 
   const lobbyExpired = useCallback(() => {
@@ -1630,13 +1689,28 @@ function LobbyScreen({ session, onLeave }) {
     }
   }, [lobby])
 
-  const activeResults = (lobby?.phase === 'results' && lobby?.winner) ? lobby : persistedResults
+  const activeResults = (lobby?.phase === 'results' && lobby?.winner && lobby?.lobby_code === session.lobbyCode)
+    ? lobby
+    : (persistedResults?.lobby_code === session.lobbyCode ? persistedResults : null)
+
+  const handlePlayAgainTransition = useCallback((newMembership) => {
+    setPersistedResults(null)
+    onPlayAgain?.(newMembership)
+  }, [onPlayAgain])
 
   return (
     <>
       <ErrorToast message={error} onClose={clearError} />
       {activeResults ? (
-        <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} error={error} clearError={clearError} />
+        <ResultsScreen
+          lobby={activeResults}
+          session={session}
+          onLeave={onLeave}
+          onPlayAgain={handlePlayAgainTransition}
+          send={send}
+          error={error}
+          clearError={clearError}
+        />
       ) : !lobby ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
           <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">
@@ -1695,7 +1769,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      {session ? <LobbyScreen session={session} onLeave={leaveLobby} /> : <EntryScreen onJoin={joinLobby} />}
+      {session ? <LobbyScreen session={session} onLeave={leaveLobby} onPlayAgain={joinLobby} /> : <EntryScreen onJoin={joinLobby} />}
     </ErrorBoundary>
   )
 }
