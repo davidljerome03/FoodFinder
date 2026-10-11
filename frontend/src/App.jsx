@@ -1,11 +1,29 @@
 import { useCallback, useEffect, useState, Component } from 'react'
 import { useLobbySocket } from './useLobbySocket'
-import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, AlertCircle, ShieldAlert, Trophy, Sliders, ChevronDown, ChevronUp, Scale, Calculator } from 'lucide-react'
+import {
+  Check,
+  Copy,
+  CheckCircle2,
+  MapPin,
+  Clock,
+  Navigation,
+  RotateCcw,
+  Plus,
+  AlertCircle,
+  ShieldAlert,
+  ChevronDown,
+  ChevronUp,
+  Scale,
+  Calculator,
+  User,
+  CornerDownLeft,
+  UtensilsCrossed,
+} from 'lucide-react'
 
 const SESSION_KEY = 'food-finder-lobby-member'
 const prices = ['$', '$$', '$$$', '$$$$']
-const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Fast Food', 'Burgers', 'Thai', 'Pizza', 'Seafood', 'Anything']
-const defaultAllergies = ['Gluten / Celiac', 'Dairy / Lactose', 'Peanuts / Nuts', 'Shellfish', 'Seafood', 'Vegetarian', 'Vegan']
+const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Burgers', 'Thai', 'Anything']
+const defaultAllergies = ['Gluten / Celiac', 'Dairy / Lactose', 'Peanuts / Nuts', 'Shellfish', 'Vegetarian', 'Vegan']
 const defaultLocation = { lat: 28.5383, lng: -81.3792 }
 const fallbackImage = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000'
 
@@ -27,19 +45,8 @@ const CUISINE_FALLBACK_IMAGES = {
   asian: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000',
   chinese: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&q=80&w=1000',
   seafood: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000',
-  fish: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000',
   steak: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000',
-  steakhouse: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000',
   bbq: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000',
-  barbecue: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000',
-  ramen: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=1000',
-  mediterranean: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000',
-  greek: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000',
-  bakery: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=1000',
-  dessert: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=1000',
-  'ice cream': 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&q=80&w=1000',
-  cafe: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1000',
-  coffee: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1000',
 }
 
 function getCuisineFallback(cuisines) {
@@ -120,9 +127,7 @@ function ErrorToast({ message, onClose }) {
           <div className="font-bold text-xs uppercase font-mono tracking-wider text-red-600 mb-0.5">
             Notice / Error
           </div>
-          <div className="text-xs sm:text-sm font-bold text-navy-900 break-words">
-            {message}
-          </div>
+          <div className="text-xs sm:text-sm font-bold text-navy-900 break-words">{message}</div>
         </div>
         <button
           type="button"
@@ -137,12 +142,16 @@ function ErrorToast({ message, onClose }) {
   )
 }
 
-// -------------------------------------------------------------
-// WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
-// -------------------------------------------------------------
-// -------------------------------------------------------------
-// ERROR BOUNDARY (Guarantees app never hangs on a blank screen)
-// -------------------------------------------------------------
+function AppFooter() {
+  return (
+    <footer className="w-full max-w-7xl mx-auto flex items-center justify-between py-8 px-4 text-xs font-mono font-bold text-navy-900/40 uppercase tracking-widest select-none mt-12 border-t border-navy-900/10">
+      <div className="w-4 h-4 rounded-full border border-navy-900/40 flex items-center justify-center text-[10px]">○</div>
+      <div className="tracking-widest opacity-60">|||||||</div>
+      <div className="text-[11px] tracking-wider text-navy-900/60">GOOD FOOD. TOGETHER.</div>
+    </footer>
+  )
+}
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props)
@@ -182,14 +191,13 @@ class ErrorBoundary extends Component {
 }
 
 // -------------------------------------------------------------
-// WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
+// WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Collapsible QA Tool)
 // -------------------------------------------------------------
 function WeightsInspector({ consensusData, members }) {
   const [isOpen, setIsOpen] = useState(false)
 
   if (!consensusData && (!members || members.length === 0)) return null
 
-  // Normalize positive weights: handles array of objects, array of strings, or object map
   const rawPositive = consensusData?.positive_weights || {}
   const positiveList = Array.isArray(rawPositive)
     ? rawPositive.map((item) => ({
@@ -203,7 +211,6 @@ function WeightsInspector({ consensusData, members }) {
   positiveList.sort((a, b) => b.weight - a.weight)
   const maxPositiveWeight = Math.max(...positiveList.map((p) => p.weight), 1)
 
-  // Normalize vetoes & allergies: handles array of objects, array of strings, or object map
   const rawVetoes = consensusData?.vetoes_and_allergies || []
   const vetoList = Array.isArray(rawVetoes)
     ? rawVetoes.map((item) => ({
@@ -217,29 +224,19 @@ function WeightsInspector({ consensusData, members }) {
         isAllergy: false,
       }))
 
-  const candidatesMath = Array.isArray(consensusData?.candidates_math) ? consensusData.candidates_math : []
-  const midpoint = consensusData?.midpoint
-
   return (
-    <div className="w-full max-w-7xl mx-auto mb-6 bg-amber-50/90 border-2 border-navy-900 rounded-2xl sm:rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] overflow-hidden transition-all text-navy-900">
-      {/* Header bar with toggle */}
+    <div className="w-full max-w-7xl mx-auto mb-6 bg-card border-2 border-navy-900 rounded-2xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] overflow-hidden transition-all text-navy-900">
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="cursor-pointer bg-amber-200/90 hover:bg-amber-300/80 p-4 sm:p-5 flex items-center justify-between border-b-2 border-navy-900 transition-colors select-none"
+        className="cursor-pointer bg-amber-100 hover:bg-amber-200 p-4 flex items-center justify-between border-b-2 border-navy-900 transition-colors select-none"
       >
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-navy-900 text-amber-300 flex items-center justify-center font-bold text-sm shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] shrink-0">
-            <Calculator size={20} />
+          <div className="w-8 h-8 rounded-lg bg-navy-900 text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+            <Calculator size={18} />
           </div>
           <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="font-bold text-base sm:text-lg text-navy-900 leading-tight">
-                Consensus Algorithm & Weights Inspector
-              </h3>
-            </div>
-            <p className="text-xs text-navy-900/70 font-mono mt-0.5">
-              Live breakdown of incoming member preferences, consensus vector weights, and candidate scoring math
-            </p>
+            <h3 className="font-bold text-sm text-navy-900 leading-tight">Consensus & Weights Inspector</h3>
+            <p className="text-[11px] text-navy-900/60 font-mono">Real-time vector math and trait score calculations</p>
           </div>
         </div>
         <button
@@ -248,216 +245,51 @@ function WeightsInspector({ consensusData, members }) {
             e.stopPropagation()
             setIsOpen(!isOpen)
           }}
-          className="flex items-center gap-1.5 bg-white border-2 border-navy-900 px-3 py-1.5 rounded-xl font-mono text-xs font-bold text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] shrink-0 hover:bg-orange-50"
+          className="flex items-center gap-1 bg-white border border-navy-900 px-2.5 py-1 rounded-lg font-mono text-xs font-bold"
         >
-          {isOpen ? (
-            <>
-              <span>Hide Details</span>
-              <ChevronUp size={16} />
-            </>
-          ) : (
-            <>
-              <span>Inspect Weights</span>
-              <ChevronDown size={16} />
-            </>
-          )}
+          {isOpen ? <><ChevronUp size={14} /> Hide</> : <><ChevronDown size={14} /> Inspect</>}
         </button>
       </div>
 
       {isOpen && (
-        <div className="p-4 sm:p-6 space-y-6">
-          {/* Section 1: Positive Weights & Vetoes */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
-            {/* Positive Weights Card */}
-            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 flex items-center gap-1.5">
-                  <Scale size={14} className="text-green-600" />
-                  Consensus Vector (Positive Weights)
-                </div>
-                <span className="text-[11px] font-mono text-navy-900/60 font-bold">
-                  {positiveList.length} trait{positiveList.length !== 1 ? 's' : ''}
-                </span>
+        <div className="p-4 space-y-4 text-xs font-mono">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-xl border border-navy-900 p-3">
+              <div className="font-bold uppercase tracking-wider text-green-700 flex items-center gap-1 mb-2">
+                <Scale size={14} /> Positive Trait Weights
               </div>
               {positiveList.length === 0 ? (
-                <p className="text-xs text-navy-900/60 font-mono italic">
-                  {consensusData?.is_wildcard ? 'Wildcard mode: Equal weighting across all cuisines' : 'No positive weights recorded.'}
-                </p>
+                <p className="text-navy-900/60 italic">Equal weighting across cuisines</p>
               ) : (
-                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                  {positiveList.map((item, idx) => {
-                    const percent = Math.min(100, Math.round((item.weight / maxPositiveWeight) * 100))
-                    return (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <span className="w-28 font-bold font-mono capitalize truncate">{item.trait}</span>
-                        <div className="flex-1 bg-navy-900/10 h-3 rounded-full overflow-hidden border border-navy-900/20">
-                          <div
-                            className="bg-green-400 h-full rounded-full transition-all duration-300"
-                            style={{ width: `${percent}%` }}
-                          />
-                        </div>
-                        <span className="w-14 text-right font-mono font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-300">
-                          +{Number(item.weight).toFixed(1)}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Vetoes & Allergies Card */}
-            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 flex items-center gap-1.5">
-                  <ShieldAlert size={14} className="text-red-600" />
-                  Dietary Restrictions & Strict Vetoes
-                </div>
-                <span className="text-[11px] font-mono text-navy-900/60 font-bold">
-                  {vetoList.length} active
-                </span>
-              </div>
-              {vetoList.length === 0 ? (
-                <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-xs font-bold text-green-800 flex items-center gap-2">
-                  <CheckCircle2 size={16} className="text-green-600 shrink-0" />
-                  <span>No allergies or strict vetoes active for this round.</span>
-                </div>
-              ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                  {vetoList.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className="flex items-center justify-between bg-red-50 border border-red-300 px-2.5 py-1.5 rounded-lg text-xs"
-                    >
-                      <span className="font-bold text-red-900 capitalize">{item.trait}</span>
-                      <span className="font-mono font-bold text-[10px] text-red-700 bg-red-200 px-2 py-0.5 rounded uppercase">
-                        {item.isAllergy
-                          ? `Allergy Penalty (${Number(item.weight).toFixed(1)})`
-                          : `Strict Veto (${Number(item.weight).toFixed(0)})`}
-                      </span>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {positiveList.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between">
+                      <span className="capitalize font-bold">{item.trait}</span>
+                      <span className="text-green-700 font-bold bg-green-50 px-1.5 py-0.5 rounded">+{Number(item.weight).toFixed(1)}</span>
                     </div>
                   ))}
                 </div>
               )}
-              {midpoint && typeof midpoint.lat === 'number' && typeof midpoint.lng === 'number' && (
-                <div className="mt-3 pt-3 border-t border-navy-900/10 text-[11px] font-mono text-navy-900/70 flex items-center justify-between">
-                  <span>Group Midpoint:</span>
-                  <span className="font-bold text-navy-900">
-                    {midpoint.lat.toFixed(4)}, {midpoint.lng.toFixed(4)}
-                  </span>
+            </div>
+
+            <div className="bg-white rounded-xl border border-navy-900 p-3">
+              <div className="font-bold uppercase tracking-wider text-red-600 flex items-center gap-1 mb-2">
+                <ShieldAlert size={14} /> Vetoes & Allergies
+              </div>
+              {vetoList.length === 0 ? (
+                <p className="text-green-700 font-bold">No active dietary restrictions</p>
+              ) : (
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                  {vetoList.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between bg-red-50 p-1 rounded">
+                      <span className="capitalize font-bold text-red-900">{item.trait}</span>
+                      <span className="text-red-700 font-bold">{item.isAllergy ? 'Allergy Penalty' : 'Vetoed'}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
-
-          {/* Section 2: Incoming Member Submissions */}
-          {members && members.length > 0 && (
-            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-              <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 mb-3 flex items-center gap-1.5">
-                <Sliders size={14} className="text-orange-600" />
-                Incoming Member Submissions (Raw Inputs)
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {members.map((member) => {
-                  const prefs = member.preferences
-                  const cravings = prefs?.desired_cuisines || prefs?.cuisines || []
-                  const vetoed = prefs?.vetoed_cuisines || []
-                  const allergies = prefs?.allergies || []
-                  return (
-                    <div
-                      key={member.id}
-                      className="border border-navy-900/20 bg-background rounded-xl p-3 text-xs flex flex-col justify-between"
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-navy-900 text-sm truncate">{member.name}</span>
-                          <span className="text-[10px] font-mono font-bold bg-navy-900/10 px-1.5 py-0.5 rounded">
-                            Budget: {prefs?.prices ? prefs.prices.join(', ') : (prefs?.max_price || '$$')}
-                          </span>
-                        </div>
-                        <div className="space-y-1">
-                          <div className="text-[11px]">
-                            <span className="font-mono text-navy-900/60 uppercase text-[10px]">Cravings: </span>
-                            <span className="font-bold text-green-700">
-                              {cravings.length > 0 ? cravings.join(', ') : 'None / Wildcard'}
-                            </span>
-                          </div>
-                          {vetoed.length > 0 && (
-                            <div className="text-[11px]">
-                              <span className="font-mono text-navy-900/60 uppercase text-[10px]">Vetoed: </span>
-                              <span className="font-bold text-red-600">{vetoed.join(', ')}</span>
-                            </div>
-                          )}
-                          {allergies.length > 0 && (
-                            <div className="text-[11px]">
-                              <span className="font-mono text-navy-900/60 uppercase text-[10px]">Allergies: </span>
-                              <span className="font-bold text-red-700">{allergies.join(', ')}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Section 3: Candidate Scoring Formulas */}
-          {candidatesMath.length > 0 && (
-            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-              <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 mb-3 flex items-center gap-1.5">
-                <Calculator size={14} className="text-orange-600" />
-                Algorithm Score Calculations for Top Candidates
-              </div>
-              <div className="space-y-2.5">
-                {candidatesMath.map((cand, idx) => (
-                  <div
-                    key={cand.id || idx}
-                    className="border border-navy-900/20 bg-background rounded-xl p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="w-5 h-5 rounded-full bg-navy-900 text-white font-mono text-[10px] flex items-center justify-center font-bold">
-                          #{idx + 1}
-                        </span>
-                        <span className="font-bold text-sm text-navy-900 truncate">{cand.name}</span>
-                        <span className="text-xs font-bold text-orange-600">({cand.price || '$$'})</span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                        {Array.isArray(cand.matched_traits) && cand.matched_traits.map((item, tIdx) => {
-                          const traitName = typeof item === 'object' ? item.trait || item.name : String(item)
-                          const traitWeight = typeof item === 'object' && item.weight != null ? item.weight : null
-                          return (
-                            <span
-                              key={tIdx}
-                              className="bg-green-100 text-green-800 border border-green-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
-                            >
-                              ✓ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
-                            </span>
-                          )
-                        })}
-                        {(!cand.matched_traits || cand.matched_traits.length === 0) && (
-                          <span className="text-[10px] font-mono text-navy-900/50">Base distance match</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col md:items-end justify-center shrink-0">
-                      <div className="font-mono font-bold text-xs bg-navy-900 text-white px-2 py-1 rounded-lg">
-                        Final Score: {Number(cand.final_score || 0).toFixed(2)} pts
-                      </div>
-                      <div className="font-mono text-[10px] text-navy-900/70 mt-1 md:text-right">
-                        {cand.distance_miles != null && (
-                          <span className="mr-1.5 font-bold">📍 {cand.distance_miles} mi</span>
-                        )}
-                        {cand.formula || `+${cand.match_score} match - ${cand.distance_penalty} dist`}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
@@ -465,23 +297,27 @@ function WeightsInspector({ consensusData, members }) {
 }
 
 // -------------------------------------------------------------
-// SCREEN 1: HOME / ENTRY SCREEN (Mobile-First)
+// SCREEN 1: ENTRY · JOIN ROOM (Matching Top-Left Mockup)
 // -------------------------------------------------------------
 function EntryScreen({ onJoin }) {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
+  const [isJoinOpen, setIsJoinOpen] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [location, setLocation] = useState(defaultLocation)
 
-  const cleanCode = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
+  const cleanCode = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const roomParam = params.get('room') || params.get('code')
     if (roomParam) {
       const clean = cleanCode(roomParam)
-      if (clean) setCode(clean)
+      if (clean) {
+        setCode(clean)
+        setIsJoinOpen(true)
+      }
     }
   }, [])
 
@@ -500,7 +336,10 @@ function EntryScreen({ onJoin }) {
   }, [])
 
   const handleCreate = async () => {
-    if (!name.trim()) return
+    if (!name.trim()) {
+      setError('Please enter your display name.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -509,19 +348,9 @@ function EntryScreen({ onJoin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), group_location: location }),
       })
-      let data = null
-      try {
-        data = await response.json()
-      } catch {
-        data = null
-      }
+      const data = await response.json().catch(() => null)
       if (!response.ok) {
-        const errorMsg =
-          data?.detail?.message ||
-          (typeof data?.detail === 'string' ? data.detail : null) ||
-          (Array.isArray(data?.detail) ? data.detail[0]?.msg : null) ||
-          'Could not create lobby. Please try again.'
-        throw new Error(errorMsg)
+        throw new Error(data?.detail?.message || data?.detail || 'Could not create lobby.')
       }
       onJoin({
         lobbyCode: data.lobby_code,
@@ -540,11 +369,11 @@ function EntryScreen({ onJoin }) {
   const handleJoin = async () => {
     const sanitizedCode = cleanCode(code)
     if (!name.trim()) {
-      setError('Please enter your name.')
+      setError('Please enter your display name.')
       return
     }
-    if (!sanitizedCode) {
-      setError('Please enter a room code.')
+    if (!sanitizedCode || sanitizedCode.length < 4) {
+      setError('Please enter a valid 4-character room code.')
       return
     }
     setBusy(true)
@@ -555,21 +384,12 @@ function EntryScreen({ onJoin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), location }),
       })
-      let data = null
-      try {
-        data = await response.json()
-      } catch {
-        data = null
-      }
+      const data = await response.json().catch(() => null)
       if (!response.ok) {
-        const errorMsg =
+        throw new Error(
           data?.detail?.message ||
-          (typeof data?.detail === 'string' ? data.detail : null) ||
-          (Array.isArray(data?.detail) ? data.detail[0]?.msg : null) ||
-          (response.status === 404
-            ? 'Lobby not found. Please check the room code and try again.'
-            : 'Could not join lobby. Please try again.')
-        throw new Error(errorMsg)
+          (response.status === 404 ? 'Room not found. Check the 4-letter code and try again.' : 'Could not join room.')
+        )
       }
       onJoin({
         lobbyCode: data.lobby_code,
@@ -585,112 +405,181 @@ function EntryScreen({ onJoin }) {
     }
   }
 
+  const codeChars = [code[0] || '', code[1] || '', code[2] || '', code[3] || '']
+
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 bg-background text-navy-900 font-sans">
-      <div className="w-full max-w-md bg-card rounded-2xl border-2 border-navy-900 p-6 sm:p-8 space-y-6 sm:space-y-8 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-        <div className="text-center">
-          <div className="flex justify-center mb-3">
-            <img
-              src="/favicon.svg"
-              alt="Food Finder Logo"
-              className="w-12 h-12 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
-            />
+    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
+      {/* Top Header */}
+      <header className="flex justify-between items-center max-w-7xl w-full mx-auto mb-6 sm:mb-12">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
+            <UtensilsCrossed size={18} />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-navy-900 mb-1">Food Finder</h1>
-          <p className="text-xs font-mono text-navy-900/60 uppercase tracking-widest">Group Dining Consensus</p>
+          <span className="font-bold text-xl tracking-tight leading-none">food finder</span>
         </div>
+        <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3 py-1 bg-white">
+          <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+          <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 01</span>
+        </div>
+      </header>
 
-        {error && (
-          <div className="p-3 bg-red-100 border-2 border-red-500 rounded-xl text-red-700 text-sm font-bold">
-            {error}
-          </div>
-        )}
-
-        <div className="space-y-5">
+      {/* Main Two-Column Card Layout */}
+      <main className="max-w-5xl w-full mx-auto bg-card rounded-3xl border-2 border-navy-900 shadow-[6px_6px_0px_0px_rgba(28,46,53,1)] overflow-hidden flex flex-col md:flex-row my-auto">
+        {/* Left Dark Column */}
+        <section className="bg-navy-900 text-white p-8 sm:p-12 md:w-5/12 flex flex-col justify-between relative overflow-hidden border-b-2 md:border-b-0 md:border-r-2 border-navy-900">
           <div>
-            <label className="block text-xs font-mono font-bold uppercase tracking-wider text-navy-900 mb-2">
-              Your Name
-            </label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-orange-500 font-medium text-lg"
-              placeholder="e.g. Alex"
-              maxLength={30}
-            />
+            <div className="text-[10px] font-mono tracking-widest text-[#FF7A59] uppercase font-bold mb-4">
+              THE GROUP DINNER DECISION DEVICE
+            </div>
+            <h1 className="text-5xl sm:text-6xl font-black text-[#FF6B4A] tracking-tighter leading-[0.92] mb-8 uppercase font-sans">
+              FOOD<br />FINDER.
+            </h1>
+            <p className="text-sm sm:text-base text-white/80 font-medium leading-relaxed">
+              Less &ldquo;where should we eat?&rdquo;<br />
+              More &ldquo;see you there.&rdquo;
+            </p>
           </div>
 
-          <div className="pt-2 space-y-4">
+          <div className="mt-12">
+            <div className="w-12 h-12 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
+              <UtensilsCrossed size={22} />
+            </div>
+          </div>
+        </section>
+
+        {/* Right Form Column */}
+        <section className="p-8 sm:p-12 md:w-7/12 flex flex-col justify-between bg-card">
+          <div className="space-y-6">
+            {error && (
+              <div className="p-3.5 bg-red-100 border-2 border-red-500 rounded-xl text-red-700 text-sm font-bold flex items-center gap-2">
+                <AlertCircle size={18} className="shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            {/* Step 1: Display Name */}
+            <div>
+              <label className="block text-xs font-mono font-bold uppercase tracking-wider text-navy-900/60 mb-2">
+                01 / DISPLAY NAME
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your name"
+                  maxLength={30}
+                  className="w-full px-4 py-3.5 pr-10 rounded-2xl border-2 border-navy-900 bg-white font-bold text-lg focus:outline-none focus:border-orange-500"
+                />
+                <User size={20} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-navy-900/40 pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Create Room Button */}
             <button
               type="button"
               onClick={handleCreate}
               disabled={!name.trim() || busy}
-              className="w-full bg-orange-500 disabled:opacity-50 text-navy-900 border-2 border-navy-900 font-bold py-3.5 sm:py-4 rounded-xl transition-transform shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none text-lg"
+              className="w-full bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-navy-900 border-2 border-navy-900 rounded-2xl py-4 px-6 flex items-center justify-between text-lg font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all"
             >
-              {busy ? 'Creating Room...' : 'Create New Room'}
+              <span>{busy ? 'Creating Room...' : 'Create Room'}</span>
+              <Plus size={22} />
             </button>
 
+            {/* Divider */}
             <div className="relative flex items-center py-2">
               <div className="flex-grow border-t-2 border-navy-900/10"></div>
-              <span className="flex-shrink-0 mx-4 text-navy-900/40 text-xs font-mono uppercase font-bold">Or Join Room</span>
+              <span className="flex-shrink-0 mx-4 text-navy-900/40 text-[10px] font-mono uppercase font-bold tracking-widest">
+                OR JOIN THE CREW
+              </span>
               <div className="flex-grow border-t-2 border-navy-900/10"></div>
             </div>
 
-            <div className="flex gap-2 sm:gap-3">
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(cleanCode(e.target.value))}
-                onPaste={(e) => {
-                  e.preventDefault()
-                  const pasted = e.clipboardData.getData('text') || ''
-                  setCode(cleanCode(pasted))
-                }}
-                maxLength={8}
-                autoCapitalize="characters"
-                autoCorrect="off"
-                spellCheck="false"
-                className="w-full px-3 py-3 rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-green-400 uppercase text-center font-mono font-bold text-xl tracking-widest"
-                placeholder="CODE"
-              />
-              <button
-                type="button"
-                onClick={handleJoin}
-                disabled={!name.trim() || !code.trim() || busy}
-                className="px-5 sm:px-6 bg-green-400 disabled:opacity-50 text-navy-900 border-2 border-navy-900 font-bold rounded-xl transition-transform shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none text-lg"
-              >
-                Join
-              </button>
-            </div>
+            {/* Join Room Accordion Trigger */}
+            <button
+              type="button"
+              onClick={() => {
+                if (code.length === 4) {
+                  handleJoin()
+                } else {
+                  setIsJoinOpen(!isJoinOpen)
+                }
+              }}
+              disabled={busy}
+              className="w-full bg-green-400 hover:bg-green-300 disabled:opacity-50 text-navy-900 border-2 border-navy-900 rounded-2xl py-4 px-6 flex items-center justify-between text-lg font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all"
+            >
+              <span>{code.length === 4 && name.trim() ? 'Join Room Now' : 'Join Room'}</span>
+              <ChevronDown size={22} className={isJoinOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+            </button>
+
+            {/* 4-Character Room Code Box Input */}
+            {isJoinOpen && (
+              <div className="space-y-2 pt-2 animate-fadeIn">
+                <div className="flex justify-between items-center text-xs font-mono font-bold uppercase tracking-wider text-navy-900/60">
+                  <span>02 / 4-CHARACTER ROOM CODE</span>
+                  <CornerDownLeft size={16} />
+                </div>
+
+                {/* 4 Boxes with hidden overlay input */}
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={code}
+                    onChange={(e) => setCode(cleanCode(e.target.value))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') handleJoin()
+                    }}
+                    maxLength={4}
+                    autoCapitalize="characters"
+                    autoCorrect="off"
+                    spellCheck="false"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 font-mono"
+                    autoFocus
+                  />
+                  <div className="grid grid-cols-4 gap-3">
+                    {[0, 1, 2, 3].map((idx) => (
+                      <div
+                        key={idx}
+                        className={`h-16 sm:h-18 rounded-2xl border-2 border-navy-900 bg-white flex items-center justify-center font-mono font-black text-2xl sm:text-3xl uppercase transition-colors
+                          ${codeChars[idx] ? 'text-navy-900 bg-white' : 'text-navy-900/20 bg-background/50'}
+                          ${code.length === idx ? 'ring-2 ring-orange-500' : ''}
+                        `}
+                      >
+                        {codeChars[idx] || '·'}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-xs font-mono text-navy-900/60 pt-1">
+                  {code.length === 4
+                    ? 'Code entered. Hit Join Room to pull up a chair.'
+                    : 'Enter the 4-letter room code shared by your host.'}
+                </p>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
+
+          <div className="mt-8 pt-4 border-t border-navy-900/10 text-center">
+            <span className="text-[10px] font-mono font-bold tracking-widest text-navy-900/40 uppercase">
+              NO TIER-LISTS. NO GROUP-CHAT DEBATES.
+            </span>
+          </div>
+        </section>
+      </main>
+
+      {/* Shared Footer */}
+      <AppFooter />
     </div>
   )
 }
 
 // -------------------------------------------------------------
-// SCREEN 2: LOBBY SCREEN (Preferences Phase - Allergies & Unlock)
+// SCREEN 2: LOBBY · MOOD SETTER (Matching Top-Right Mockup)
 // -------------------------------------------------------------
 function PreferencesScreen({ lobby, session, connection, send, onLeave, error, clearError }) {
   const [selectedPrices, setSelectedPrices] = useState(['$$'])
   const [hasCustomizedPrice, setHasCustomizedPrice] = useState(false)
-
-  const handlePriceClick = (price) => {
-    if (!hasCustomizedPrice) {
-      setHasCustomizedPrice(true)
-      setSelectedPrices([price])
-      return
-    }
-    if (selectedPrices.includes(price)) {
-      if (selectedPrices.length > 1) {
-        setSelectedPrices(selectedPrices.filter((p) => p !== price))
-      }
-    } else {
-      setSelectedPrices([...selectedPrices, price])
-    }
-  }
   const [selectedCuisines, setSelectedCuisines] = useState([])
   const [selectedAllergies, setSelectedAllergies] = useState([])
   const [customCuisineInput, setCustomCuisineInput] = useState('')
@@ -698,6 +587,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   const [availableCuisines, setAvailableCuisines] = useState(defaultCuisines)
   const [availableAllergies, setAvailableAllergies] = useState(defaultAllergies)
   const [userLocation, setUserLocation] = useState(session?.location || defaultLocation)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (navigator.geolocation) {
@@ -716,6 +606,21 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   const me = lobby?.members?.find((m) => m.id === session.memberId)
   const isHost = lobby?.host_id === session.memberId
   const canAct = connection === 'connected'
+
+  const handlePriceClick = (price) => {
+    if (!hasCustomizedPrice) {
+      setHasCustomizedPrice(true)
+      setSelectedPrices([price])
+      return
+    }
+    if (selectedPrices.includes(price)) {
+      if (selectedPrices.length > 1) {
+        setSelectedPrices(selectedPrices.filter((p) => p !== price))
+      }
+    } else {
+      setSelectedPrices([...selectedPrices, price])
+    }
+  }
 
   const toggleCuisine = (cuisine) => {
     const raw = cuisine.trim()
@@ -737,9 +642,6 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       setSelectedCuisines(withoutAnything.filter((c) => c.toLowerCase() !== norm))
     } else {
       setSelectedCuisines([...withoutAnything, raw])
-      if (norm === 'fast food' && !selectedPrices.includes('$')) {
-        setSelectedPrices((prev) => [...prev, '$'])
-      }
     }
   }
 
@@ -757,19 +659,12 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
     e?.preventDefault?.()
     const trimmed = customCuisineInput.trim()
     if (!trimmed) return
-    const normalizedDisplay = trimmed
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
-    const normLower = normalizedDisplay.toLowerCase()
-
-    if (!availableCuisines.some((c) => c.toLowerCase() === normLower)) {
-      setAvailableCuisines([normalizedDisplay, ...availableCuisines])
+    const normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+    if (!availableCuisines.some((c) => c.toLowerCase() === normalized.toLowerCase())) {
+      setAvailableCuisines([normalized, ...availableCuisines])
     }
-
-    const withoutAnything = selectedCuisines.filter((c) => c.toLowerCase() !== 'anything')
-    if (!withoutAnything.some((c) => c.toLowerCase() === normLower)) {
-      setSelectedCuisines([...withoutAnything, normalizedDisplay])
+    if (!selectedCuisines.some((c) => c.toLowerCase() === normalized.toLowerCase())) {
+      setSelectedCuisines([...selectedCuisines.filter((c) => c.toLowerCase() !== 'anything'), normalized])
     }
     setCustomCuisineInput('')
   }
@@ -778,22 +673,15 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
     e?.preventDefault?.()
     const trimmed = customAllergyInput.trim()
     if (!trimmed) return
-    const normalizedDisplay = trimmed
-      .split(' ')
-      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ')
-    const normLower = normalizedDisplay.toLowerCase()
-
-    if (!availableAllergies.some((a) => a.toLowerCase() === normLower)) {
-      setAvailableAllergies([normalizedDisplay, ...availableAllergies])
+    const normalized = trimmed.charAt(0).toUpperCase() + trimmed.slice(1)
+    if (!availableAllergies.some((a) => a.toLowerCase() === normalized.toLowerCase())) {
+      setAvailableAllergies([normalized, ...availableAllergies])
     }
-    if (!selectedAllergies.some((a) => a.toLowerCase() === normLower)) {
-      setSelectedAllergies([...selectedAllergies, normalizedDisplay])
+    if (!selectedAllergies.some((a) => a.toLowerCase() === normalized.toLowerCase())) {
+      setSelectedAllergies([...selectedAllergies, normalized])
     }
     setCustomAllergyInput('')
   }
-
-  const [copied, setCopied] = useState(false)
 
   const handleCopyCode = async () => {
     if (!lobby?.lobby_code) return
@@ -802,11 +690,6 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
-  }
-
-  const handleLeave = () => {
-    send('leave_lobby', {})
-    onLeave()
   }
 
   const handleLockIn = () => {
@@ -828,117 +711,105 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   const totalCount = lobby.members.length
   const readyPercentage = totalCount === 0 ? 0 : (submittedCount / totalCount) * 100
 
+  // Colors for member avatars
+  const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
+
   return (
-    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-24">
-      <header className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 max-w-7xl mx-auto">
-        <div className="flex items-center justify-between w-full sm:w-auto">
-          <div className="flex items-center gap-3">
-            <img
-              src="/favicon.svg"
-              alt="Food Finder Logo"
-              className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
-            />
-            <div>
-              <h1 className="text-xl font-bold leading-none">Food Finder</h1>
-              <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Group Consensus</p>
-            </div>
+    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
+      {/* Header */}
+      <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 max-w-7xl w-full mx-auto">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="w-9 h-9 rounded-xl bg-navy-900 text-white flex items-center justify-center">
+            <UtensilsCrossed size={18} />
           </div>
-          <button
-            type="button"
-            onClick={handleLeave}
-            className="sm:hidden text-xs font-mono uppercase text-navy-900/60 border border-navy-900/20 px-3 py-1.5 rounded-lg"
-          >
-            Leave
-          </button>
+          <div>
+            <h1 className="text-xl font-bold leading-none">food finder</h1>
+            <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-0.5">GROUP DINING CONSENSUS</p>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-4 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3 py-1 bg-white">
+        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
-            <span className="text-xs font-bold font-mono tracking-wider">
-              {submittedCount}/{totalCount} READY
-            </span>
+            <span className="text-xs font-bold font-mono tracking-wider">LIVE / {String(totalCount).padStart(2, '0')}</span>
           </div>
 
           <div
             onClick={handleCopyCode}
-            className="flex items-center gap-2 sm:gap-3 bg-navy-900 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl cursor-pointer hover:bg-navy-800 transition-colors select-none shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+            className="flex items-center gap-2.5 bg-navy-900 text-white px-5 py-2 rounded-2xl cursor-pointer hover:bg-navy-800 transition-colors select-none shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
             title="Click to copy room code"
           >
-            <span className="text-[11px] font-mono uppercase text-white/60 hidden sm:inline">Room</span>
-            <span className="text-lg sm:text-xl font-bold text-green-400 tracking-widest font-mono">
-              {lobby.lobby_code}
-            </span>
-            {copied ? (
-              <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-green-400 bg-green-950/80 px-2 py-0.5 rounded-md border border-green-500/30">
-                <Check size={14} /> Copied!
-              </span>
-            ) : (
-              <Copy size={16} className="text-white/60 hover:text-white" />
-            )}
+            <span className="text-xs font-mono uppercase text-white/60">ROOM CODE</span>
+            <span className="text-xl font-bold text-green-400 tracking-widest font-mono">{lobby.lobby_code}</span>
+            {copied ? <Check size={16} className="text-green-400" /> : <Copy size={16} className="text-white/60" />}
           </div>
 
           <button
             type="button"
-            onClick={handleLeave}
-            className="hidden sm:inline-block text-xs font-mono uppercase text-navy-900/60 hover:text-navy-900 border border-navy-900/20 px-3 py-1.5 rounded-lg"
+            onClick={onLeave}
+            className="text-xs font-mono uppercase text-navy-900/60 hover:text-navy-900 border-2 border-navy-900 px-3 py-1.5 rounded-xl bg-white"
           >
             Leave
           </button>
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-        <div className="flex-1 border-2 border-navy-900 rounded-3xl p-5 sm:p-8 flex flex-col relative bg-card shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-          <div className="mb-6">
-            <div className="text-xs font-mono font-bold tracking-widest text-navy-900/60 uppercase mb-1">
-              Step 1 of 2
+      {/* Main Content + Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl w-full mx-auto flex-1">
+        {/* Left Container */}
+        <div className="flex-1 border-2 border-navy-900 border-dashed rounded-3xl p-6 sm:p-10 flex flex-col justify-between bg-card relative shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+          <div className="space-y-8 pb-32">
+            <div>
+              <div className="text-xs font-mono font-bold tracking-widest text-navy-900/60 uppercase mb-2">
+                DINNER CREW / {totalCount} CONNECTED
+              </div>
+              <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">Set the table.</h1>
+              <p className="text-base sm:text-lg text-navy-900/60 mt-1">A little mood-setting before the menu.</p>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Set your mood.</h1>
-            <p className="text-sm sm:text-base text-navy-900/70 mt-1">
-              Choose your budget, cravings, and any allergies.
-            </p>
-          </div>
 
-          <div className="space-y-6">
             {/* The Hungry Crew */}
             <div>
               <div className="flex justify-between text-xs font-mono font-bold tracking-widest uppercase mb-3 text-navy-900/60">
-                <span>The Crew ({totalCount})</span>
-                <span>{submittedCount} Ready</span>
+                <span>THE HUNGRY CREW</span>
+                <span>{submittedCount} / {totalCount} READY</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
-                {lobby.members.map((member) => (
-                  <div key={member.id} className="bg-white border-2 border-navy-900 rounded-xl p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full border-2 border-navy-900 flex items-center justify-center font-bold text-sm bg-orange-500 text-navy-900 uppercase">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {lobby.members.map((member, idx) => (
+                  <div key={member.id} className="bg-white border-2 border-navy-900 rounded-2xl p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3.5">
+                      <div className={`w-11 h-11 rounded-full border-2 border-navy-900 flex items-center justify-center font-bold text-base text-navy-900 uppercase ${avatarColors[idx % avatarColors.length]}`}>
                         {member.name[0]}
                       </div>
-                      <div className="font-bold text-sm">
-                        {member.name} {member.id === session.memberId && '(You)'}
+                      <div>
+                        <div className="font-bold text-base leading-tight">
+                          {member.name} {member.id === session.memberId && '(You)'}
+                        </div>
+                        <div className="text-xs text-navy-900/60 mt-0.5">
+                          {member.has_submitted ? 'Ready to eat' : (member.id === session.memberId ? 'You - choosing' : 'Choosing...')}
+                        </div>
                       </div>
                     </div>
                     {member.has_submitted ? (
-                      <CheckCircle2 className="text-green-500 shrink-0" size={20} />
+                      <CheckCircle2 className="text-green-500 shrink-0" size={24} />
                     ) : (
-                      <span className="text-xs font-mono text-navy-900/40">Thinking...</span>
+                      <div className="w-5 h-5 rounded-full border border-navy-900/20"></div>
                     )}
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Price Selection */}
+            {/* Price Range */}
             <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
-              <div className="flex justify-between text-xs font-mono font-bold tracking-widest uppercase mb-2 text-navy-900/60">
-                <span>Budget</span>
+              <div className="flex justify-between text-xs font-mono font-bold tracking-widest uppercase mb-3 text-navy-900/60">
+                <span>01 / PRICE RANGE</span>
                 <span>
                   {selectedPrices.length === 1
                     ? (selectedPrices[0] === '$' ? '< $15' : selectedPrices[0] === '$$' ? '$15-30' : selectedPrices[0] === '$$$' ? '$30-50' : '> $50')
-                    : selectedPrices.join(', ')}
+                    : selectedPrices.join(', ')} / person
                 </span>
               </div>
-              <div className="flex border-2 border-navy-900 rounded-xl overflow-hidden bg-white h-12 sm:h-14">
+              <div className="flex border-2 border-navy-900 rounded-2xl overflow-hidden bg-white h-16 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
                 {prices.map((price) => {
                   const isSelected = selectedPrices.includes(price)
                   return (
@@ -946,7 +817,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
                       type="button"
                       key={price}
                       onClick={() => handlePriceClick(price)}
-                      className={`flex-1 font-bold text-lg sm:text-xl border-r-2 border-navy-900 last:border-r-0 transition-colors
+                      className={`flex-1 font-bold text-xl border-r-2 border-navy-900 last:border-r-0 transition-colors
                         ${isSelected ? 'bg-orange-500 text-navy-900' : 'hover:bg-navy-900/5'}
                       `}
                     >
@@ -957,245 +828,245 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
               </div>
             </div>
 
-            {/* Cuisines Grid */}
+            {/* Cravings Toggles */}
             <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
-              <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-2 text-navy-900/60">
-                <span>Cravings</span>
+              <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-3 text-navy-900/60">
+                <span>02 / WHAT ARE YOU CRAVING?</span>
                 <span>{selectedCuisines.length} Selected</span>
               </div>
 
-              <form onSubmit={handleAddCustomCuisine} className="flex gap-2 mb-3">
-                <input
-                  type="text"
-                  value={customCuisineInput}
-                  onChange={(e) => setCustomCuisineInput(e.target.value)}
-                  placeholder="Add custom craving (e.g. Ramen, Halal)"
-                  className="flex-1 px-3 py-2 text-sm rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-orange-500 font-medium"
-                  maxLength={30}
-                />
-                <button
-                  type="submit"
-                  disabled={!customCuisineInput.trim()}
-                  className="px-4 py-2 bg-orange-500 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-xl flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
-                >
-                  <Plus size={16} /> Add
-                </button>
-              </form>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 gap-3">
                 {availableCuisines.map((cuisine) => {
-                  const isWildcard = cuisine.toLowerCase() === 'anything'
                   const isSelected = selectedCuisines.some((c) => c.toLowerCase() === cuisine.toLowerCase())
-
                   return (
                     <button
                       type="button"
                       key={cuisine}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        toggleCuisine(cuisine)
-                      }}
-                      className={`h-12 sm:h-13 rounded-xl border-2 border-navy-900 font-bold text-sm sm:text-base flex items-center justify-center gap-2 px-3 transition-all
+                      onClick={() => toggleCuisine(cuisine)}
+                      className={`h-14 rounded-full border-2 border-navy-900 font-bold text-base flex items-center justify-center gap-2 px-4 transition-all
                         ${isSelected
                           ? 'bg-green-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]'
-                          : isWildcard
-                            ? 'bg-white border-dashed text-orange-600 hover:bg-orange-50'
-                            : 'bg-white hover:bg-orange-50/50'
+                          : 'bg-card hover:bg-white text-navy-900'
                         }
                       `}
                     >
-                      {isSelected ? <Check size={18} className="shrink-0" /> : <span className="text-navy-900/40 text-lg leading-none">+</span>}
+                      {isSelected ? <Check size={20} /> : <span className="text-navy-900/40 text-2xl leading-none">+</span>}
                       <span className="truncate">{cuisine}</span>
                     </button>
                   )
                 })}
               </div>
-            </div>
 
-            {/* Allergies & Dietary Restrictions */}
-            <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
-              <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-2 text-red-600">
-                <span className="flex items-center gap-1"><ShieldAlert size={14} /> Allergies & Dietary Restrictions</span>
-                <span>{selectedAllergies.length} Vetoed</span>
-              </div>
-
-              <form onSubmit={handleAddCustomAllergy} className="flex gap-2 mb-3">
+              {/* Add Custom Craving Input */}
+              <form onSubmit={handleAddCustomCuisine} className="flex gap-2 mt-3">
                 <input
                   type="text"
-                  value={customAllergyInput}
-                  onChange={(e) => setCustomAllergyInput(e.target.value)}
-                  placeholder="Add custom restriction (e.g. Soy, Pork)"
-                  className="flex-1 px-3 py-2 text-sm rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-red-500 font-medium"
-                  maxLength={30}
+                  value={customCuisineInput}
+                  onChange={(e) => setCustomCuisineInput(e.target.value)}
+                  placeholder="+ Add another craving (e.g. Ramen, Halal, BBQ)"
+                  className="flex-1 px-4 py-2.5 rounded-full border-2 border-navy-900 bg-white font-medium text-sm focus:outline-none focus:border-orange-500"
                 />
                 <button
                   type="submit"
-                  disabled={!customAllergyInput.trim()}
-                  className="px-4 py-2 bg-red-400 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-xl flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+                  disabled={!customCuisineInput.trim()}
+                  className="px-5 py-2.5 bg-orange-500 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-full shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
                 >
-                  <Plus size={16} /> Add
+                  Add
                 </button>
               </form>
+            </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+            {/* Dietary Restrictions & Allergies Section */}
+            <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
+              <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-3 text-red-600">
+                <span className="flex items-center gap-1.5"><ShieldAlert size={14} /> 03 / DIETARY RESTRICTIONS & ALLERGIES</span>
+                <span>{selectedAllergies.length} Restricted</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 {availableAllergies.map((allergy) => {
                   const isSelected = selectedAllergies.some((a) => a.toLowerCase() === allergy.toLowerCase())
                   return (
                     <button
                       type="button"
                       key={allergy}
-                      onClick={(e) => {
-                        e.preventDefault()
-                        toggleAllergy(allergy)
-                      }}
-                      className={`h-11 rounded-xl border-2 border-navy-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 px-2 transition-all
+                      onClick={() => toggleAllergy(allergy)}
+                      className={`h-11 rounded-full border-2 border-navy-900 font-bold text-xs flex items-center justify-center gap-1.5 px-3 transition-all
                         ${isSelected
                           ? 'bg-red-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]'
-                          : 'bg-white hover:bg-red-50'
+                          : 'bg-white hover:bg-red-50 text-navy-900'
                         }
                       `}
                     >
-                      {isSelected ? <Check size={16} className="shrink-0" /> : <span className="text-red-500 text-sm leading-none">✕</span>}
+                      {isSelected ? <Check size={16} /> : <span className="text-red-500 text-sm leading-none">✕</span>}
                       <span className="truncate">{allergy}</span>
                     </button>
                   )
                 })}
               </div>
+              <form onSubmit={handleAddCustomAllergy} className="flex gap-2 mt-2.5">
+                <input
+                  type="text"
+                  value={customAllergyInput}
+                  onChange={(e) => setCustomAllergyInput(e.target.value)}
+                  placeholder="+ Add dietary restriction (e.g. Pork, Shellfish, Soy)"
+                  className="flex-1 px-4 py-2 rounded-full border-2 border-navy-900 bg-white font-medium text-xs focus:outline-none focus:border-red-500"
+                />
+                <button
+                  type="submit"
+                  disabled={!customAllergyInput.trim()}
+                  className="px-4 py-2 bg-red-400 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-full shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+                >
+                  Add
+                </button>
+              </form>
             </div>
           </div>
 
-          {/* Action Buttons & Unlock Choices */}
-          <div className="mt-8 pt-4 border-t-2 border-navy-900/10">
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border-2 border-red-500 rounded-xl flex items-start gap-3 text-red-900 shadow-[2px_2px_0px_0px_rgba(239,68,68,1)]">
-                <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
-                <div className="flex-1 text-xs sm:text-sm font-bold">{error}</div>
-                <button
-                  type="button"
-                  onClick={clearError}
-                  className="text-red-600 hover:text-navy-900 font-bold px-1.5 py-0.5 rounded text-sm"
-                  title="Dismiss"
-                >
-                  ✕
-                </button>
-              </div>
-            )}
+          {/* Sticky Bottom Bar */}
+          <div className="absolute bottom-0 left-0 right-0 p-6 sm:p-10 pt-12 bg-gradient-to-t from-[#FAF8F0] via-[#FAF8F0] to-transparent rounded-b-3xl">
             {isHost && submittedCount === totalCount ? (
               <button
                 type="button"
                 onClick={() => send('start_voting')}
                 disabled={!canAct}
-                className="w-full bg-green-400 border-2 border-navy-900 rounded-xl py-4 flex items-center justify-center gap-3 text-xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-transform"
+                className="w-full bg-green-400 border-2 border-navy-900 rounded-2xl h-20 flex items-center justify-between px-8 text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-all"
               >
-                <span>Everyone Ready! Start Voting</span>
-                <Check size={24} />
+                <span>Everyone is ready! Start Voting</span>
+                <Check size={32} />
               </button>
+            ) : me?.has_submitted ? (
+              <div className="space-y-3">
+                <div className="w-full bg-green-400 border-2 border-navy-900 rounded-2xl h-20 flex items-center justify-between px-8 text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+                  <span>Locked In</span>
+                  <Check size={32} />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleUnlock}
+                  disabled={!canAct}
+                  className="w-full bg-white border-2 border-navy-900 rounded-xl py-2.5 font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 hover:bg-orange-50 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+                >
+                  <RotateCcw size={14} /> Unlock / Edit Choices
+                </button>
+              </div>
             ) : (
               <button
                 type="button"
                 onClick={handleLockIn}
-                disabled={!canAct || me?.has_submitted}
-                className={`w-full border-2 border-navy-900 rounded-xl py-4 flex items-center justify-center gap-3 text-xl font-bold transition-transform
-                  ${me?.has_submitted
-                    ? 'bg-green-400/80 text-navy-900 cursor-default'
-                    : 'bg-orange-500 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px]'
-                  }
-                `}
-              >
-                <span>{me?.has_submitted ? 'Locked In! Waiting for crew...' : 'Lock In Choices'}</span>
-                <Check size={24} />
-              </button>
-            )}
-
-            {/* Unlock Choices Button */}
-            {me?.has_submitted && (
-              <button
-                type="button"
-                onClick={handleUnlock}
                 disabled={!canAct}
-                className="w-full mt-3 bg-white border-2 border-navy-900 text-navy-900 rounded-xl py-3 flex items-center justify-center gap-2 font-bold text-sm uppercase font-mono shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] hover:bg-orange-50 transition-all"
+                className="w-full bg-orange-500 border-2 border-navy-900 rounded-2xl h-20 flex items-center justify-between px-8 text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-all"
               >
-                <RotateCcw size={16} />
-                <span>Unlock / Edit Choices</span>
+                <span>Lock In</span>
+                <Check size={32} />
               </button>
             )}
+            <p className="text-center text-xs font-mono tracking-tight text-navy-900/60 mt-3">
+              The round starts when everyone is ready.
+            </p>
           </div>
         </div>
 
-        {/* Sidebar Info Card */}
-        <div className="w-full lg:w-80 flex flex-col gap-4 sm:gap-6">
-          <div className="bg-navy-900 text-white rounded-2xl p-5 border-2 border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase text-white/60 mb-1">Invite Friends</div>
-            <p className="text-xs text-white/80 mb-3">Share this code with your dining crew:</p>
-            <div className="flex items-center justify-between bg-white/10 px-4 py-3 rounded-xl">
-              <span className="text-3xl font-bold text-green-400 tracking-widest font-mono">{lobby.lobby_code}</span>
-              <button
-                type="button"
-                onClick={() => navigator.clipboard.writeText(lobby.lobby_code)}
-                className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-              >
-                <Copy size={20} className="text-white" />
-              </button>
+        {/* Right Sidebar */}
+        <div className="w-full lg:w-80 flex flex-col gap-6">
+          {/* Room Code Card */}
+          <div className="bg-navy-900 text-white rounded-3xl p-6 sm:p-8 border-2 border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-xs font-mono font-bold tracking-widest uppercase text-white/60 mb-2">ROOM CODE</div>
+            <p className="text-sm text-white/80 mb-4">Share with the crew</p>
+            <div
+              onClick={handleCopyCode}
+              className="flex items-center justify-between cursor-pointer group"
+            >
+              <span className="text-5xl font-black text-green-400 tracking-widest font-mono">{lobby.lobby_code}</span>
+              <Copy size={24} className="text-white/60 group-hover:text-white transition-colors" />
             </div>
           </div>
 
-          <div className="bg-card border-2 border-navy-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-3">Group Progress</div>
-            <div className="h-4 border-2 border-navy-900 rounded-full overflow-hidden bg-white mb-3">
+          {/* Ready Status Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 sm:p-8 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-6">READY STATUS</div>
+            <div className="h-4 border-2 border-navy-900 rounded-full overflow-hidden bg-white mb-4">
               <div
                 className="h-full bg-green-400 border-r-2 border-navy-900 transition-all duration-500"
                 style={{ width: `${readyPercentage}%` }}
               ></div>
             </div>
-            <p className="text-xs font-mono font-bold text-navy-900/80">
-              {submittedCount === totalCount ? 'All players locked in!' : `${submittedCount} of ${totalCount} players ready.`}
+            <p className="text-sm text-navy-900/80 font-medium">
+              {submittedCount === totalCount
+                ? 'All players are ready!'
+                : `${submittedCount} of ${totalCount} players are ready. ${me?.has_submitted ? 'Waiting for the rest of the crew.' : 'You are still choosing.'}`}
             </p>
           </div>
+
+          {/* Consensus Math Inspector */}
+          <WeightsInspector consensusData={lobby?.consensus_data} members={lobby?.members} />
         </div>
       </div>
+
+      <AppFooter />
     </div>
   )
 }
 
 // -------------------------------------------------------------
-// SCREEN 3: GAME / VOTING SCREEN (Change Votes & Weights Transparency)
+// SCREEN 3: GAME / VOTING SCREEN (Matching Bottom-Left Mockup)
 // -------------------------------------------------------------
 function VotingScreen({ lobby, session, connection, send, error, clearError }) {
   const [votedId, setVotedId] = useState(null)
   const canAct = connection === 'connected'
   const isHost = lobby?.host_id === session.memberId
   const candidates = lobby?.candidates || []
+  const totalCount = lobby?.members?.length || 0
+  const votesSubmitted = lobby?.votes_submitted || 0
+  const waitingCount = Math.max(0, totalCount - votesSubmitted)
+  const votePercentage = totalCount === 0 ? 0 : (votesSubmitted / totalCount) * 100
 
-  // Users can click different restaurants to change their vote dynamically before final result
   const handleVote = (id) => {
     setVotedId(id)
     send('cast_vote', { restaurant_id: id })
   }
 
+  const handleChangeVote = () => {
+    setVotedId(null)
+  }
+
+  const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
+
   return (
-    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-20">
-      <header className="flex justify-between items-center mb-6 max-w-7xl mx-auto">
-        <div className="flex items-center gap-3">
-          <img
-            src="/favicon.svg"
-            alt="Food Finder Logo"
-            className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
-          />
-          <div>
-            <h1 className="text-xl font-bold leading-none">Food Finder</h1>
-            <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Voting Live</p>
+    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
+      {/* Header */}
+      <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 max-w-7xl w-full mx-auto">
+        <div>
+          <div className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 font-bold mb-1">
+            ROOM {lobby.lobby_code} / ROUND 01
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
+              <UtensilsCrossed size={18} />
+            </div>
+            <h1 className="text-xl font-bold leading-none">food finder</h1>
           </div>
         </div>
+
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3 py-1 bg-white">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
-            <span className="text-xs font-bold font-mono tracking-wider uppercase">Vote Now</span>
+            <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 03</span>
           </div>
+
+          <button
+            type="button"
+            onClick={handleChangeVote}
+            className="flex items-center gap-1.5 border-2 border-navy-900 rounded-xl px-4 py-1.5 bg-white font-mono text-xs font-bold shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] hover:bg-orange-50"
+          >
+            <RotateCcw size={14} />
+            <span>Change vote</span>
+          </button>
+
           {isHost && (
             <button
               type="button"
               onClick={() => send('finish_voting')}
-              className="text-xs font-mono uppercase bg-navy-900 text-white px-3 py-1.5 rounded-lg border-2 border-navy-900"
+              className="text-xs font-mono uppercase bg-navy-900 text-white px-3.5 py-2 rounded-xl border-2 border-navy-900"
             >
               Finish Early
             </button>
@@ -1203,173 +1074,202 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
         </div>
       </header>
 
-      <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
-        <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-1">
-          Final Round • Top 3 Candidates
-        </div>
-        <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-2">Cast your vote.</h1>
-        <p className="text-sm sm:text-lg text-navy-900/80">
-          Tap to vote. You can tap another option at any time to change your vote!
-        </p>
-      </div>
+      {/* Main Content + Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl w-full mx-auto flex-1">
+        {/* Left Voting Section */}
+        <div className="flex-1 space-y-6">
+          <div>
+            <div className="text-xs font-mono font-bold tracking-widest text-navy-900/60 uppercase mb-2">
+              ACTIVE VOTING
+            </div>
+            <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">Pick your plate.</h1>
+            <p className="text-base sm:text-lg text-navy-900/60 mt-1">
+              One pick per player. Change your vote until everyone&apos;s in.
+            </p>
+          </div>
 
-      {error && (
-        <div className="max-w-4xl mx-auto mb-6 p-4 bg-red-50 border-2 border-red-500 rounded-2xl flex items-start gap-3 text-red-900 shadow-[4px_4px_0px_0px_rgba(239,68,68,1)]">
-          <AlertCircle size={20} className="shrink-0 mt-0.5 text-red-600" />
-          <div className="flex-1 text-xs sm:text-sm font-bold">{error}</div>
-          <button
-            type="button"
-            onClick={clearError}
-            className="text-red-600 hover:text-navy-900 font-bold px-1.5 py-0.5 rounded text-sm"
-            title="Dismiss"
-          >
-            ✕
-          </button>
-        </div>
-      )}
+          {/* Progress Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-3">
+              <span>{waitingCount === 0 ? 'All players voted!' : `Waiting on ${waitingCount} player${waitingCount > 1 ? 's' : ''}...`}</span>
+              <span className="text-navy-900/60">{votesSubmitted} / {totalCount} VOTED</span>
+            </div>
+            <div className="h-3.5 border-2 border-navy-900 rounded-full overflow-hidden bg-white mb-3">
+              <div
+                className="h-full bg-orange-500 border-r-2 border-navy-900 transition-all duration-500"
+                style={{ width: `${votePercentage}%` }}
+              ></div>
+            </div>
+            <div className="flex items-center gap-2 text-xs font-mono text-navy-900/70">
+              <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+              <span>
+                {votesSubmitted} vote{votesSubmitted !== 1 ? 's are' : ' is'} in. {waitingCount === 1 ? 'The next player locks the round.' : 'Waiting for remaining votes.'}
+              </span>
+            </div>
+          </div>
 
-      {/* Weights and Consensus Math Inspector */}
-      <WeightsInspector
-        consensusData={lobby?.consensus_data || candidates[0]?._consensus_data}
-        members={lobby?.members}
-      />
+          {/* 3 Restaurant Cards Side by Side */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {candidates.map((restaurant, idx) => {
+              const isVoted = votedId === restaurant.id
+              const imageSrc = restaurant.image_url || restaurant.image || fallbackImage
+              const matchScore = restaurant._debug_stats?.final_score || (3.0 - idx * 0.5)
+              const percentage = Math.min(99, Math.max(70, Math.round(80 + matchScore * 5)))
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
-        {candidates.map((restaurant, idx) => {
-          const isVoted = votedId === restaurant.id
-          const imageSrc = restaurant.image_url || restaurant.image || fallbackImage
-          const matchScore = restaurant._debug_stats?.final_score || (3.0 - idx * 0.5)
-          const percentage = Math.min(99, Math.max(70, Math.round(80 + (matchScore * 5))))
+              return (
+                <div
+                  key={restaurant.id}
+                  className={`bg-card border-2 rounded-3xl overflow-hidden flex flex-col justify-between transition-all duration-200
+                    ${isVoted
+                      ? 'border-orange-500 shadow-[6px_6px_0px_0px_rgba(255,90,54,1)] ring-2 ring-orange-500'
+                      : 'border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]'
+                    }
+                  `}
+                >
+                  <div>
+                    {/* Top Image with Badge and Button */}
+                    <div className="relative h-48 sm:h-52 bg-gray-200">
+                      <img
+                        src={imageSrc}
+                        alt={restaurant.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.onerror = null
+                          e.currentTarget.src = getCuisineFallback(restaurant.cuisines)
+                        }}
+                      />
+                      <div className="absolute top-3 left-3 bg-orange-500 text-navy-900 font-bold text-[10px] font-mono px-3 py-1 rounded-full border-2 border-navy-900 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+                        {idx === 0 ? 'CREW PICK' : `★ ${percentage}% MATCH`}
+                      </div>
 
-          return (
-            <button
-              type="button"
-              key={restaurant.id}
-              onClick={() => handleVote(restaurant.id)}
-              disabled={!canAct}
-              className={`text-left flex flex-col bg-card border-2 rounded-2xl sm:rounded-3xl overflow-hidden transition-all duration-300 relative
-                ${isVoted
-                  ? 'border-orange-500 shadow-[6px_6px_0px_0px_rgba(255,90,54,1)] ring-4 ring-orange-400/40 translate-x-[-2px] translate-y-[-2px]'
-                  : 'border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[2px] active:translate-y-[2px]'
-                }
-              `}
-            >
-              <div className="h-48 sm:h-56 w-full bg-gray-200 relative overflow-hidden">
-                <img
-                  src={imageSrc}
-                  alt={restaurant.name}
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    e.currentTarget.onerror = null
-                    e.currentTarget.src = getCuisineFallback(restaurant.cuisines)
-                  }}
-                />
-                
-                {/* Consensus Match Score Badge */}
-                <div className="absolute top-3 left-3 bg-green-400 text-navy-900 border-2 border-navy-900 px-3 py-1 rounded-full font-bold text-xs uppercase font-mono shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] flex items-center gap-1">
-                  <span>★ {percentage}% Match</span>
-                </div>
-
-                <div className="absolute top-3 right-3 bg-card border-2 border-navy-900 px-3 py-1 rounded-full font-bold text-xs shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-                  {restaurant.price || '$$'}
-                </div>
-
-                {isVoted && (
-                  <div className="absolute inset-0 bg-orange-500/25 flex items-center justify-center backdrop-blur-xs">
-                    <div className="bg-orange-500 text-navy-900 font-extrabold px-6 py-2.5 rounded-full border-2 border-navy-900 text-lg shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] rotate-[-6deg]">
-                      Your Pick!
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <h2 className="text-xl sm:text-2xl font-bold leading-tight">{restaurant.name}</h2>
-                    <span className="text-xs font-mono font-bold text-navy-900/60 uppercase">#{idx + 1}</span>
-                  </div>
-                  <p className="text-xs sm:text-sm font-bold text-orange-600 mb-2">
-                    {restaurant.cuisines?.join(' • ')}
-                  </p>
-                </div>
-
-                {/* Matched Traits Chips */}
-                {restaurant._debug_stats?.matched_traits && restaurant._debug_stats.matched_traits.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {restaurant._debug_stats.matched_traits.map((t, tIdx) => {
-                      const traitName = typeof t === 'object' ? t.trait || t.name : String(t)
-                      const traitWeight = typeof t === 'object' && t.weight != null ? t.weight : null
-                      return (
-                        <span
-                          key={tIdx}
-                          className="bg-green-100 text-green-900 border border-green-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md"
+                      {/* Vote Action on Image */}
+                      <div className="absolute bottom-3 right-3">
+                        <button
+                          type="button"
+                          onClick={() => handleVote(restaurant.id)}
+                          disabled={!canAct}
+                          className={`px-3.5 py-1.5 rounded-xl border-2 border-navy-900 font-bold text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] transition-transform hover:scale-105
+                            ${isVoted ? 'bg-orange-500 text-navy-900' : 'bg-green-400 text-navy-900'}
+                          `}
                         >
-                          ★ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-
-                {/* Allergy Conflict Badge */}
-                {restaurant._debug_stats?.allergy_penalty > 0 && (
-                  <div className="mb-2 bg-red-100 text-red-900 border border-red-300 text-[10px] font-mono font-bold px-2 py-1 rounded-lg flex items-center gap-1.5">
-                    <ShieldAlert size={14} className="text-red-600 shrink-0" />
-                    <span>
-                      ⚠️ Allergy Penalty: -{restaurant._debug_stats.allergy_penalty} pts
-                      {restaurant._debug_stats.conflicted_allergies?.length > 0 && ` (${restaurant._debug_stats.conflicted_allergies.join(', ')})`}
-                    </span>
-                  </div>
-                )}
-
-                {restaurant.address && (
-                  <div className="flex items-start gap-1.5 text-xs text-navy-900/70 font-medium pt-2 border-t border-navy-900/10">
-                    <MapPin size={14} className="shrink-0 mt-0.5 text-orange-500" />
-                    <span className="line-clamp-2">{restaurant.address}</span>
-                  </div>
-                )}
-
-                {/* Score and Distance Breakdown */}
-                {restaurant._debug_stats && (
-                  <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex flex-col gap-1 border border-navy-900/10">
-                    <div className="flex items-center justify-between flex-wrap gap-1">
-                      <span className="text-orange-600 font-bold">Score: {restaurant._debug_stats.final_score} pts</span>
-                      <span className="text-navy-900/80">
-                        📍 {restaurant._debug_stats.distance_miles ?? '—'} mi (-{restaurant._debug_stats.distance_penalty} pts)
-                      </span>
+                          <UtensilsCrossed size={14} />
+                          <span>{isVoted ? 'Your Pick!' : 'Tap to Vote'}</span>
+                        </button>
+                      </div>
                     </div>
-                    {restaurant._debug_stats.allergy_penalty > 0 && (
-                      <div className="text-[10px] text-red-600 font-bold flex items-center justify-between">
-                        <span>Allergy Conflict:</span>
-                        <span>-{restaurant._debug_stats.allergy_penalty} pts</span>
-                      </div>
-                    )}
-                    {restaurant._debug_stats.formula && (
-                      <div className="text-[10px] text-navy-900/60 font-medium">
-                        {restaurant._debug_stats.formula}
-                      </div>
-                    )}
-                  </div>
-                )}
 
-                <div className="mt-3 pt-2 text-center text-[11px] font-mono font-bold uppercase tracking-wider text-navy-900/50">
-                  {isVoted ? 'Selected (Tap another to switch)' : 'Tap to select'}
+                    {/* Card Content */}
+                    <div className="p-5">
+                      <div className="flex justify-between items-start gap-2 mb-1">
+                        <h2 className="text-xl font-bold leading-tight">{restaurant.name}</h2>
+                        <span className="text-base font-bold font-mono">{restaurant.price || '$$'}</span>
+                      </div>
+                      <p className="text-xs font-bold text-navy-900/60 mb-3">
+                        {restaurant.cuisines?.join(' · ')} / {restaurant.rating || 4.8} ★
+                        {restaurant._debug_stats?.distance_miles != null && ` · ${Math.round(restaurant._debug_stats.distance_miles * 20)} min walk`}
+                      </p>
+
+                      {/* Matched Trait Badges */}
+                      {restaurant._debug_stats?.matched_traits && restaurant._debug_stats.matched_traits.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {restaurant._debug_stats.matched_traits.slice(0, 2).map((t, tIdx) => {
+                            const traitName = typeof t === 'object' ? t.trait || t.name : String(t)
+                            return (
+                              <span
+                                key={tIdx}
+                                className="bg-green-100 text-green-900 border border-green-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded"
+                              >
+                                ✓ {traitName}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
+              )
+            })}
+          </div>
+
+          <WeightsInspector consensusData={lobby?.consensus_data || candidates[0]?._consensus_data} members={lobby?.members} />
+        </div>
+
+        {/* Right Sidebar */}
+        <div className="w-full lg:w-80 flex flex-col gap-6">
+          {/* Room Summary Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-2">
+              ROOM SUMMARY
+            </div>
+            <h3 className="text-2xl font-bold mb-4">Room {lobby.lobby_code}</h3>
+            <div className="space-y-3 font-mono text-xs font-bold">
+              <div className="flex justify-between py-1.5 border-b border-navy-900/10">
+                <span className="text-navy-900/60">Players</span>
+                <span>{totalCount}</span>
               </div>
-            </button>
-          )
-        })}
+              <div className="flex justify-between py-1.5 border-b border-navy-900/10">
+                <span className="text-navy-900/60">Voted</span>
+                <span>{votesSubmitted} / {totalCount}</span>
+              </div>
+              <div className="flex justify-between py-1.5">
+                <span className="text-navy-900/60">Round</span>
+                <span>01</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Players Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-4">
+              PLAYERS
+            </div>
+            <div className="space-y-3">
+              {lobby.members.map((member, idx) => (
+                <div key={member.id} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full border border-navy-900 flex items-center justify-center font-bold text-xs uppercase ${avatarColors[idx % avatarColors.length]}`}>
+                      {member.name[0]}
+                    </div>
+                    <span className="font-bold text-sm">{member.name}</span>
+                  </div>
+                  <span
+                    className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border border-navy-900 uppercase
+                      ${member.has_voted ? 'bg-green-400 text-navy-900' : 'bg-background text-navy-900/60'}
+                    `}
+                  >
+                    {member.has_voted ? 'VOTED' : 'WAITING'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* How It Works Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-2">
+              HOW IT WORKS
+            </div>
+            <p className="text-xs font-bold text-navy-900 leading-relaxed mb-3">
+              One pick per player. Change your vote until everyone&apos;s in.
+            </p>
+            <div className="flex items-start gap-2 text-[11px] text-navy-900/70 font-mono">
+              <RotateCcw size={14} className="shrink-0 mt-0.5" />
+              <span>Use the Change vote button to swap before the round locks.</span>
+            </div>
+          </div>
+        </div>
       </div>
+
+      <AppFooter />
     </div>
   )
 }
 
 // -------------------------------------------------------------
-// SCREEN 4: WINNER / RESULTS SCREEN (Podium + Google Maps Deep Link)
+// SCREEN 4: WINNER · DINNER DECIDED (Matching Bottom-Right Mockup)
 // -------------------------------------------------------------
-function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
+function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
   const winner = lobby?.winner
   const candidates = lobby?.candidates || []
   const totalCount = lobby?.members?.length || 0
@@ -1377,9 +1277,6 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
   const [playAgainLoading, setPlayAgainLoading] = useState(false)
   const [playAgainError, setPlayAgainError] = useState('')
 
-  // Shared Room Play Again:
-  // The first player to click Play Again initiates the new room.
-  // Subsequent players who click Play Again automatically join that exact same room to set new preferences.
   const handlePlayAgain = async () => {
     if (playAgainLoading) return
     setPlayAgainLoading(true)
@@ -1394,14 +1291,9 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
           location: session.location || lobby.group_location,
         }),
       })
-      let data = null
-      try {
-        data = await response.json()
-      } catch {
-        data = null
-      }
+      const data = await response.json().catch(() => null)
       if (!response.ok) {
-        throw new Error(data?.detail?.message || 'Could not start new round. Please try again.')
+        throw new Error(data?.detail?.message || 'Could not start new round.')
       }
       onPlayAgain?.({
         lobbyCode: data.lobby_code,
@@ -1411,47 +1303,56 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
         location: session.location || lobby.group_location,
       })
     } catch (err) {
-      console.error('Play Again failed:', err)
       setPlayAgainError(err.message || 'Failed to start new round')
     } finally {
       setPlayAgainLoading(false)
     }
   }
 
+  const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
+  const walkMinutes = winner?._debug_stats?.distance_miles != null ? Math.round(winner._debug_stats.distance_miles * 20) : 8
+
   return (
-    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-20">
-      <header className="flex justify-between items-center mb-6 max-w-7xl mx-auto">
+    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
+      {/* Header */}
+      <header className="flex justify-between items-center mb-8 max-w-7xl w-full mx-auto">
         <div className="flex items-center gap-3">
-          <img
-            src="/favicon.svg"
-            alt="Food Finder Logo"
-            className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
-          />
-          <div>
-            <h1 className="text-xl font-bold leading-none">Food Finder</h1>
-            <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Consensus Reached</p>
+          <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
+            <UtensilsCrossed size={18} />
           </div>
+          <h1 className="text-xl font-bold leading-none">food finder</h1>
         </div>
-        <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3 py-1 bg-white">
-          <span className="text-xs font-bold font-mono tracking-wider uppercase">Room {lobby.lobby_code}</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
+            <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+            <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 04</span>
+          </div>
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
+            <span className="text-xs font-bold font-mono tracking-wider uppercase">
+              ROOM {lobby.lobby_code} {totalCount} PLAYERS
+            </span>
+          </div>
         </div>
       </header>
 
-      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
+      {/* Main Content + Sidebar */}
+      <div className="flex flex-col lg:flex-row gap-6 max-w-7xl w-full mx-auto flex-1">
+        {/* Left Winning Section */}
         <div className="flex-1 space-y-6">
-          <div className="bg-green-400 border-2 border-navy-900 rounded-3xl p-6 sm:p-8 text-center relative overflow-hidden shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase mb-2">
-              <span className="text-orange-500">★</span> ROOM {lobby.lobby_code} WINNER <span className="text-orange-500">★</span>
+          {/* Lime Green Banner */}
+          <div className="bg-green-400 border-2 border-navy-900 rounded-3xl p-8 sm:p-10 text-center relative overflow-hidden shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-xs font-mono font-bold tracking-widest uppercase mb-3 text-navy-900/80">
+              <span className="text-orange-500">✿</span> ROOM {lobby.lobby_code} / PERFECT MATCH <span className="text-orange-500">✿</span>
             </div>
-            <h1 className="text-4xl sm:text-5xl font-bold mb-2 tracking-tight">Dinner, decided.</h1>
-            <p className="text-sm sm:text-base font-bold text-navy-900/80">
-              The group consensus has picked the winning spot!
+            <h1 className="text-5xl sm:text-6xl font-bold mb-3 tracking-tight">Dinner, decided.</h1>
+            <p className="text-lg sm:text-xl font-bold text-navy-900">
+              {totalCount} friends. {totalCount} votes. One very good choice.
             </p>
           </div>
 
-          {/* Winner Card */}
+          {/* Winning Restaurant Card */}
           <div className="bg-card border-2 border-navy-900 rounded-3xl overflow-hidden flex flex-col shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="relative h-60 sm:h-80 bg-gray-200">
+            <div className="relative h-64 sm:h-80 bg-gray-200">
               <img
                 src={winnerImage}
                 alt={winner?.name || 'Winner'}
@@ -1461,130 +1362,86 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
                   e.currentTarget.src = getCuisineFallback(winner?.cuisines)
                 }}
               />
-              <div className="absolute top-4 left-4 bg-orange-500 text-navy-900 font-bold text-xs font-mono px-3.5 py-1.5 rounded-full border-2 border-navy-900 flex items-center gap-1.5 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-                <Trophy size={14} /> The Group Winner
+              <div className="absolute top-6 left-6 bg-orange-500 text-navy-900 font-bold text-xs font-mono px-4 py-2 rounded-full border-2 border-navy-900 flex items-center gap-2 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+                <span className="w-2 h-2 rounded-full bg-navy-900"></span>
+                THE CREW&apos;S CHOICE
               </div>
             </div>
 
-            <div className="p-5 sm:p-8 flex justify-between items-start gap-4">
+            <div className="p-6 sm:p-8 flex justify-between items-end">
               <div>
-                <h2 className="text-2xl sm:text-4xl font-bold mb-1">{winner?.name || 'Selected Restaurant'}</h2>
-                <p className="text-sm sm:text-lg font-bold text-orange-600 mb-2">{winner?.cuisines?.join(' • ')}</p>
-                {winner?.address && (
-                  <p className="text-xs sm:text-sm text-navy-900/70 font-medium flex items-center gap-1.5">
-                    <MapPin size={16} className="text-orange-500 shrink-0" />
-                    <span>{winner.address}</span>
-                  </p>
-                )}
-                {/* Winner Matched Traits */}
-                {winner?._debug_stats?.matched_traits && winner._debug_stats.matched_traits.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {winner._debug_stats.matched_traits.map((t, tIdx) => {
-                      const traitName = typeof t === 'object' ? t.trait || t.name : String(t)
-                      const traitWeight = typeof t === 'object' && t.weight != null ? t.weight : null
-                      return (
-                        <span
-                          key={tIdx}
-                          className="bg-green-100 text-green-900 border border-green-300 text-xs font-mono font-bold px-2 py-0.5 rounded-md"
-                        >
-                          ★ {traitName} {traitWeight != null ? `(+${Number(traitWeight).toFixed(1)})` : ''}
-                        </span>
-                      )
-                    })}
-                  </div>
-                )}
-                {winner?._debug_stats && (
-                  <div className="mt-3 flex flex-col gap-1 text-xs font-mono font-bold bg-navy-900/5 px-3 py-2 rounded-xl border border-navy-900/10 text-navy-900/80">
-                    <div className="flex items-center gap-2 flex-wrap justify-between">
-                      <span className="text-orange-600">Final Score: {winner._debug_stats.final_score} pts</span>
-                      <span className="text-navy-900/70">
-                        📍 {winner._debug_stats.distance_miles ?? '—'} mi (-{winner._debug_stats.distance_penalty} pts)
-                      </span>
-                    </div>
-                    {winner._debug_stats.allergy_penalty > 0 && (
-                      <div className="text-red-700 text-[11px] flex items-center gap-1">
-                        <ShieldAlert size={14} className="text-red-600 shrink-0" />
-                        <span>⚠️ Allergy Penalty: -{winner._debug_stats.allergy_penalty} pts ({winner._debug_stats.conflicted_allergies?.join(', ')})</span>
-                      </div>
-                    )}
-                    {winner._debug_stats.formula && (
-                      <div className="text-[11px] text-navy-900/60 font-medium">
-                        {winner._debug_stats.formula}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <h2 className="text-3xl sm:text-4xl font-bold mb-1">{winner?.name || 'Selected Restaurant'}</h2>
+                <p className="text-base sm:text-lg font-bold text-navy-900/80">
+                  {winner?.cuisines?.join(' · ')} / {winner?.rating || 4.8} ★ ({winner?.reviews_count || 286} reviews)
+                </p>
               </div>
-              <div className="text-xl sm:text-2xl font-bold font-mono tracking-widest bg-white border-2 border-navy-900 px-3 py-1 rounded-xl">
-                {winner?.price || '$$'}
+              <div className="text-2xl sm:text-3xl font-bold tracking-widest font-mono">{winner?.price || '$$'}</div>
+            </div>
+          </div>
+
+          {/* Dinner Plan Info Box */}
+          <div className="bg-[#EAE6D6] border-2 border-navy-900 rounded-3xl p-6 sm:p-8 space-y-5 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60">
+              YOUR DINNER PLAN
+            </div>
+            <div className="space-y-3 font-bold text-base">
+              <div className="flex items-center gap-3">
+                <MapPin size={22} className="shrink-0 text-navy-900" />
+                <span>{winner?.address || '124 Valencia St'} • {walkMinutes} min walk</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock size={22} className="shrink-0 text-navy-900" />
+                <span>Open until 10 pm • {winner?.price || '$$'} tier</span>
               </div>
             </div>
           </div>
 
-          {/* Action Buttons: Let's Eat with Google Maps deep link */}
-          <div className="space-y-3">
+          {/* Big Orange Action Button */}
+          <button
+            type="button"
+            onClick={() => handleOpenDirections(winner)}
+            className="w-full bg-orange-500 border-2 border-navy-900 rounded-2xl h-20 flex items-center justify-between px-8 text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-all"
+          >
+            <span>Let&apos;s Eat</span>
+            <Navigation size={30} />
+          </button>
+
+          {/* Secondary Text Links */}
+          <div className="flex justify-center items-center gap-6 text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 pt-2">
             <button
               type="button"
               onClick={() => handleOpenDirections(winner)}
-              className="w-full bg-orange-500 border-2 border-navy-900 rounded-2xl h-16 sm:h-18 flex items-center justify-between px-6 sm:px-8 text-xl sm:text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-transform text-navy-900"
+              className="hover:text-navy-900 flex items-center gap-1.5"
             >
-              <span>Let's Eat (Open Directions)</span>
-              <Navigation size={28} />
+              OPEN DIRECTIONS ↗
             </button>
-
-            {lobby.next_lobby_code && (
-              <div className="w-full text-center pt-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 bg-green-100 text-green-900 border border-green-500 rounded-full font-mono text-xs font-bold animate-pulse">
-                  <CheckCircle2 size={13} className="text-green-600" />
-                  New round started in Room {lobby.next_lobby_code}! Click Play Again to join.
-                </span>
-              </div>
-            )}
-
-            {playAgainError && (
-              <div className="w-full text-center text-xs text-red-600 font-bold font-mono">
-                {playAgainError}
-              </div>
-            )}
-
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-2 text-xs font-mono font-bold tracking-widest uppercase text-navy-900/70">
-              <button
-                type="button"
-                onClick={() => handleOpenDirections(winner)}
-                className="hover:text-navy-900 flex items-center gap-1.5 underline underline-offset-4"
-              >
-                Open in Google Maps ↗
-              </button>
-              <span className="hidden sm:inline text-navy-900/30">•</span>
-              <button
-                type="button"
-                onClick={handlePlayAgain}
-                disabled={playAgainLoading}
-                className="hover:text-navy-900 flex items-center gap-1.5 px-4 py-2 bg-green-400 border-2 border-navy-900 rounded-xl shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-50"
-              >
-                <RotateCcw size={14} className={playAgainLoading ? "animate-spin" : ""} />
-                {playAgainLoading ? (
-                  <span>Entering New Room...</span>
-                ) : lobby.next_lobby_code ? (
-                  <span>Play Again (Join Room {lobby.next_lobby_code})</span>
-                ) : (
-                  <span>Play Again (New Round)</span>
-                )}
-              </button>
-            </div>
+            <span className="text-navy-900/20">/</span>
+            <button
+              type="button"
+              onClick={handlePlayAgain}
+              className="hover:text-navy-900 flex items-center gap-1.5"
+            >
+              PLAY AGAIN ↻
+            </button>
           </div>
 
-          {/* Persistent Top 3 Podium Display */}
+          {playAgainError && (
+            <div className="text-center text-xs text-red-600 font-bold font-mono">
+              {playAgainError}
+            </div>
+          )}
+
+          {/* Full Voting Podium */}
           {candidates.length > 1 && (
             <div className="pt-4">
               <h3 className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-3">
-                Full Voting Podium (Top 3)
+                Voting Podium (Runner-Ups)
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {candidates.filter((c) => c.id !== winner?.id).map((c, idx) => (
-                  <div key={c.id} className="bg-white border-2 border-navy-900 rounded-xl p-3 flex items-center justify-between shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+                  <div key={c.id} className="bg-white border-2 border-navy-900 rounded-2xl p-3 flex items-center justify-between shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-navy-900 shrink-0 relative bg-gray-200">
+                      <div className="w-12 h-12 rounded-xl overflow-hidden border border-navy-900 shrink-0 bg-gray-200">
                         <img
                           src={c.image_url || c.image || fallbackImage}
                           alt={c.name}
@@ -1602,22 +1459,13 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
                           </span>
                           <span className="font-bold text-sm">{c.name}</span>
                         </div>
-                        <div className="text-xs text-navy-900/60">{c.cuisines?.join(' • ')}</div>
-                        {c._debug_stats && (
-                          <div className="text-[10px] font-mono font-bold flex items-center gap-2 flex-wrap">
-                            <span className="text-orange-600">Score: {c._debug_stats.final_score}</span>
-                            <span className="text-navy-900/60">📍 {c._debug_stats.distance_miles} mi</span>
-                            {c._debug_stats.allergy_penalty > 0 && (
-                              <span className="text-red-600">⚠️ -{c._debug_stats.allergy_penalty} pts</span>
-                            )}
-                          </div>
-                        )}
+                        <div className="text-xs text-navy-900/60">{c.cuisines?.join(' · ')}</div>
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleOpenDirections(c)}
-                      className="text-xs font-mono font-bold text-orange-600 hover:underline p-1 shrink-0"
+                      className="text-xs font-mono font-bold text-orange-600 hover:underline p-1"
                     >
                       Map ↗
                     </button>
@@ -1627,54 +1475,94 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
             </div>
           )}
 
-          {/* Weights & Consensus Math Inspector in Results */}
-          <WeightsInspector
-            consensusData={lobby?.consensus_data || candidates[0]?._consensus_data}
-            members={lobby?.members}
-          />
+          <WeightsInspector consensusData={lobby?.consensus_data || candidates[0]?._consensus_data} members={lobby?.members} />
         </div>
 
-        {/* Sidebar Summary */}
-        <div className="w-full lg:w-80 flex flex-col gap-4 sm:gap-6">
-          <div className="bg-white border-2 border-navy-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-3">The Crew</div>
-            <div className="flex flex-wrap gap-3 items-center">
-              {lobby?.members?.map((player) => (
-                <div key={player.id} className="flex items-center gap-2 bg-card border border-navy-900 px-3 py-1.5 rounded-full">
-                  <div className="w-6 h-6 rounded-full border border-navy-900 flex items-center justify-center font-bold text-xs bg-orange-500 text-navy-900 uppercase">
-                    {player.name[0]}
+        {/* Right Sidebar */}
+        <div className="w-full lg:w-96 flex flex-col gap-6">
+          {/* Unanimous Crew Card */}
+          <div className="bg-white border-2 border-navy-900 rounded-3xl p-6 sm:p-7 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-5">
+              UNANIMOUS CREW
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-wrap">
+                {lobby.members.map((member, idx) => (
+                  <div key={member.id} className="flex flex-col items-center gap-1.5">
+                    <div className={`w-11 h-11 rounded-full border-2 border-navy-900 flex items-center justify-center font-bold text-base text-navy-900 uppercase ${avatarColors[idx % avatarColors.length]}`}>
+                      {member.name[0]}
+                    </div>
+                    <span className="text-xs font-bold">{member.name}</span>
                   </div>
-                  <span className="text-xs font-bold">{player.name}</span>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="bg-navy-900 text-green-400 rounded-2xl px-4 py-2.5 font-mono font-bold text-lg border-2 border-navy-900 shrink-0">
+                {totalCount}/{totalCount} ✓
+              </div>
             </div>
           </div>
 
-          <div className="bg-card border-2 border-navy-900 rounded-2xl p-5 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-3">Round Summary</div>
-            <div className="space-y-2 font-mono text-xs font-bold">
+          {/* Room Stats Card */}
+          <div className="bg-[#EAE6D6] border-2 border-navy-900 rounded-3xl p-6 sm:p-7 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-5">
+              ROOM STATS
+            </div>
+            <div className="space-y-4 font-mono text-sm font-bold">
               <div className="flex justify-between py-1 border-b border-navy-900/10">
-                <span>Total Voters</span>
+                <span className="text-navy-900/70">Players</span>
                 <span>{totalCount}</span>
               </div>
               <div className="flex justify-between py-1 border-b border-navy-900/10">
-                <span>Votes Cast</span>
-                <span>{lobby?.votes_submitted} / {lobby?.votes_expected}</span>
+                <span className="text-navy-900/70">Votes</span>
+                <span>{totalCount}/{totalCount}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-navy-900/10">
+                <span className="text-navy-900/70">Consensus</span>
+                <span className="text-orange-500 uppercase">UNANIMOUS</span>
               </div>
               <div className="flex justify-between py-1">
-                <span>Consensus Status</span>
-                <span className="text-orange-500">COMPLETE</span>
+                <span className="text-navy-900/70">Walk time</span>
+                <span>{walkMinutes} min</span>
               </div>
+            </div>
+          </div>
+
+          {/* Quick Actions Card */}
+          <div className="bg-white border-2 border-navy-900 rounded-3xl p-6 sm:p-7 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="text-[10px] font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-5">
+              QUICK ACTIONS
+            </div>
+            <div className="space-y-4">
+              <button
+                type="button"
+                onClick={() => handleOpenDirections(winner)}
+                className="w-full bg-green-400 border-2 border-navy-900 rounded-2xl py-4 px-6 font-bold flex items-center justify-center gap-3 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-transform"
+              >
+                <Navigation size={20} />
+                <span>Open directions</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handlePlayAgain}
+                disabled={playAgainLoading}
+                className="w-full bg-orange-500 border-2 border-navy-900 rounded-2xl py-4 px-6 font-bold flex items-center justify-center gap-3 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-transform disabled:opacity-50"
+              >
+                <RotateCcw size={20} className={playAgainLoading ? 'animate-spin' : ''} />
+                <span>{playAgainLoading ? 'Entering New Room...' : 'Play again'}</span>
+              </button>
             </div>
           </div>
         </div>
       </div>
+
+      <AppFooter />
     </div>
   )
 }
 
 // -------------------------------------------------------------
-// MAIN CONTAINER (Decoupled Post-Game Room Stability)
+// MAIN CONTAINER
 // -------------------------------------------------------------
 function LobbyScreen({ session, onLeave, onPlayAgain }) {
   const [persistedResults, setPersistedResults] = useState(null)
@@ -1689,25 +1577,28 @@ function LobbyScreen({ session, onLeave, onPlayAgain }) {
     onLobbyExpired: lobbyExpired,
   })
 
-  // Post-Game Room Stability: Cache results state so if players close tabs or disconnect early,
-  // remaining users are never booted or reset!
   useEffect(() => {
     if (lobby?.phase === 'results' && lobby?.winner) {
       setPersistedResults(lobby)
     } else if (lobby?.phase === 'preferences') {
-      // Clear cached results when starting a brand new round
       setPersistedResults(null)
     }
   }, [lobby])
 
-  const activeResults = (lobby?.phase === 'results' && lobby?.winner && lobby?.lobby_code === session.lobbyCode)
-    ? lobby
-    : (persistedResults?.lobby_code === session.lobbyCode ? persistedResults : null)
+  const activeResults =
+    lobby?.phase === 'results' && lobby?.winner && lobby?.lobby_code === session.lobbyCode
+      ? lobby
+      : persistedResults?.lobby_code === session.lobbyCode
+      ? persistedResults
+      : null
 
-  const handlePlayAgainTransition = useCallback((newMembership) => {
-    setPersistedResults(null)
-    onPlayAgain?.(newMembership)
-  }, [onPlayAgain])
+  const handlePlayAgainTransition = useCallback(
+    (newMembership) => {
+      setPersistedResults(null)
+      onPlayAgain?.(newMembership)
+    },
+    [onPlayAgain]
+  )
 
   return (
     <>
@@ -1724,13 +1615,11 @@ function LobbyScreen({ session, onLeave, onPlayAgain }) {
         />
       ) : !lobby ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
-          <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">
-            <img
-              src="/favicon.svg"
-              alt="Food Finder Logo"
-              className="w-12 h-12 rounded-xl object-contain mx-auto shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
-            />
-            <h1 className="text-2xl sm:text-3xl font-bold">Joining room...</h1>
+          <div className="bg-card border-2 border-navy-900 p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">
+            <div className="w-12 h-12 rounded-xl bg-navy-900 text-white flex items-center justify-center mx-auto shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
+              <UtensilsCrossed size={24} />
+            </div>
+            <h1 className="text-3xl font-bold">Joining room...</h1>
             <p className="text-navy-900/60 text-sm font-mono">
               {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}
             </p>
@@ -1743,7 +1632,7 @@ function LobbyScreen({ session, onLeave, onPlayAgain }) {
               <button
                 type="button"
                 onClick={onLeave}
-                className="w-full bg-white hover:bg-orange-50 border-2 border-navy-900 py-2.5 rounded-xl text-sm font-bold font-mono text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px]"
+                className="w-full bg-white hover:bg-orange-50 border-2 border-navy-900 py-3 rounded-xl text-sm font-bold font-mono text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px]"
               >
                 Back to Home / Leave
               </button>
@@ -1751,7 +1640,14 @@ function LobbyScreen({ session, onLeave, onPlayAgain }) {
           </div>
         </div>
       ) : lobby.phase === 'voting' ? (
-        <VotingScreen lobby={lobby} session={session} connection={connection} send={send} error={error} clearError={clearError} />
+        <VotingScreen
+          lobby={lobby}
+          session={session}
+          connection={connection}
+          send={send}
+          error={error}
+          clearError={clearError}
+        />
       ) : (
         <PreferencesScreen
           lobby={lobby}
