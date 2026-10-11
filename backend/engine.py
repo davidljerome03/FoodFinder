@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import math
@@ -643,6 +644,39 @@ def _parse_place_item(
     raw_user_rating_count = p.get("userRatingCount")
     user_rating_count = int(raw_user_rating_count) if raw_user_rating_count is not None else None
 
+    # Open / Closed status from Google Places API (New)
+    business_status = str(p.get("businessStatus") or "").upper().strip()
+    current_hours = p.get("currentOpeningHours")
+    regular_hours = p.get("regularOpeningHours")
+
+    open_now = None
+    if isinstance(current_hours, dict) and "openNow" in current_hours:
+        open_now = bool(current_hours["openNow"])
+    elif isinstance(regular_hours, dict) and "openNow" in regular_hours:
+        open_now = bool(regular_hours["openNow"])
+
+    # If business is permanently or temporarily closed, or openNow is False, it is not open
+    if business_status in {"CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"} or open_now is False:
+        is_open = False
+        open_status_text = "Closed"
+    elif open_now is True:
+        is_open = True
+        open_status_text = "Open now"
+    else:
+        # If openNow wasn't specified by Google Places, default to True unless business status indicates closed
+        is_open = (business_status != "CLOSED_TEMPORARILY" and business_status != "CLOSED_PERMANENTLY")
+        open_status_text = "Open now" if is_open else "Closed"
+
+    # Extract dynamic closing time if available from nextCloseTime
+    if is_open and isinstance(current_hours, dict) and current_hours.get("nextCloseTime"):
+        try:
+            raw_close = str(current_hours["nextCloseTime"])
+            dt = datetime.datetime.fromisoformat(raw_close.replace("Z", "+00:00"))
+            close_time = dt.strftime("%I:%M %p").lstrip("0")
+            open_status_text = f"Open now • Closes {close_time}"
+        except Exception:
+            pass
+
     photos = p.get("photos") or []
     photo_resource = ""
     if isinstance(photos, list) and photos:
@@ -668,7 +702,10 @@ def _parse_place_item(
         "rating": rating,
         "user_rating_count": user_rating_count,
         "reviews_count": user_rating_count,
-        "is_open": True,
+        "is_open": is_open,
+        "open_now": open_now,
+        "open_status_text": open_status_text,
+        "business_status": business_status or "OPERATIONAL",
     }
 
 
@@ -697,7 +734,7 @@ def search_places_by_text(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours",
     }
     clean_q = query.strip()
     q_lower = clean_q.lower()
@@ -709,6 +746,7 @@ def search_places_by_text(
         text_query = f"{clean_q} restaurant"
     body: Dict[str, Any] = {
         "textQuery": text_query,
+        "openNow": True,
         "locationBias": {
             "circle": {
                 "center": {
@@ -761,7 +799,7 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount,places.businessStatus,places.currentOpeningHours,places.regularOpeningHours",
     }
 
     body = {
@@ -963,6 +1001,10 @@ def score_restaurants(
     scored_restaurants: List[Dict[str, Any]] = []
 
     for rest in restaurants:
+        # STRICT OPEN/CLOSED FILTER: Closed restaurants are never scored or recommended
+        if not rest.get("is_open", True):
+            continue
+
         rest_price = rest.get("price", "$$")
         if rest_price not in allowed_set:
             continue
@@ -1065,6 +1107,10 @@ def score_restaurants(
             rest_data["user_rating_count"] = None
         if "reviews_count" not in rest_data:
             rest_data["reviews_count"] = rest_data.get("user_rating_count")
+        if "is_open" not in rest_data:
+            rest_data["is_open"] = True
+        if "open_status_text" not in rest_data:
+            rest_data["open_status_text"] = "Open now"
 
         if include_debug:
             rest_data["_debug_stats"] = {
@@ -1078,6 +1124,8 @@ def score_restaurants(
                 "rating": rest_data.get("rating"),
                 "user_rating_count": rest_data.get("user_rating_count"),
                 "reviews_count": rest_data.get("reviews_count"),
+                "is_open": rest_data.get("is_open", True),
+                "open_status_text": rest_data.get("open_status_text", "Open now"),
                 "final_score": round(item["final_score"], 2),
                 "matched_traits": item["matched_traits"],
                 "formula": item["formula"],
@@ -1156,7 +1204,8 @@ def recommend_restaurants(
         for craving in positive_desired[:3]:
             match_count = sum(
                 1 for r in raw_restaurants
-                if r.get("price") in allowed_prices
+                if r.get("is_open", True)
+                and r.get("price") in allowed_prices
                 and any(traits_overlap(c, craving) for c in r.get("cuisines", []))
             )
             if match_count < 3:
@@ -1182,7 +1231,9 @@ def recommend_restaurants(
                 if "$" in allowed_prices and craving.lower() in {"burgers", "burger"}:
                     cheap_burger_count = sum(
                         1 for r in raw_restaurants
-                        if r.get("price") == "$" and any(traits_overlap(c, "burgers") for c in r.get("cuisines", []))
+                        if r.get("is_open", True)
+                        and r.get("price") == "$"
+                        and any(traits_overlap(c, "burgers") for c in r.get("cuisines", []))
                     )
                     if cheap_burger_count < 3:
                         cheap_burger_places = search_places_by_text(
@@ -1199,7 +1250,8 @@ def recommend_restaurants(
                 if craving_is_fast_food:
                     ff_count = sum(
                         1 for r in raw_restaurants
-                        if any(traits_overlap(c, "fast_food") for c in r.get("cuisines", []))
+                        if r.get("is_open", True)
+                        and any(traits_overlap(c, "fast_food") for c in r.get("cuisines", []))
                     )
                     if ff_count < 3:
                         ff_places = search_places_by_text(
@@ -1212,8 +1264,8 @@ def recommend_restaurants(
                                 raw_restaurants.append(tp)
                                 existing_ids.add(tp["id"])
     else:
-        # Wildcard / open craving mode: check if enough restaurants match allowed_prices
-        price_match_count = sum(1 for r in raw_restaurants if r.get("price") in allowed_prices)
+        # Wildcard / open craving mode: check if enough restaurants match allowed_prices and are open
+        price_match_count = sum(1 for r in raw_restaurants if r.get("is_open", True) and r.get("price") in allowed_prices)
         if price_match_count < 3:
             price_query = "restaurant"
             if allowed_prices == {"$$$$"}:

@@ -1354,6 +1354,15 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                             </span>
                           </>
                         )}
+                        {(restaurant.open_status_text || restaurant._debug_stats?.open_status_text) && (
+                          <>
+                            <span>·</span>
+                            <span className="text-green-700 font-bold flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                              {restaurant.open_status_text || restaurant._debug_stats?.open_status_text}
+                            </span>
+                          </>
+                        )}
                       </div>
 
                       {/* Matched Trait Badges */}
@@ -1588,7 +1597,9 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
               </div>
               <div className="flex items-center gap-3">
                 <Clock size={22} className="shrink-0 text-navy-900" />
-                <span>Open until 10 pm • {winner?.price || '$$'} tier</span>
+                <span>
+                  {winner?.open_status_text || winner?._debug_stats?.open_status_text || 'Open now'} • {winner?.price || '$$'} tier
+                </span>
               </div>
             </div>
           </div>
