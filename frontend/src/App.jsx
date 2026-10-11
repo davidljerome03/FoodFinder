@@ -302,12 +302,12 @@ function WeightsInspector({ consensusData, members }) {
 function EntryScreen({ onJoin }) {
   const [name, setName] = useState('')
   const [code, setCode] = useState('')
-  const [isJoinOpen, setIsJoinOpen] = useState(true)
+  const [isJoinOpen, setIsJoinOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [location, setLocation] = useState(defaultLocation)
 
-  const cleanCode = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 4)
+  const cleanCode = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -372,8 +372,8 @@ function EntryScreen({ onJoin }) {
       setError('Please enter your display name.')
       return
     }
-    if (!sanitizedCode || sanitizedCode.length < 4) {
-      setError('Please enter a valid 4-character room code.')
+    if (!sanitizedCode || sanitizedCode.length < 6) {
+      setError('Please enter a valid 6-character room code.')
       return
     }
     setBusy(true)
@@ -388,7 +388,7 @@ function EntryScreen({ onJoin }) {
       if (!response.ok) {
         throw new Error(
           data?.detail?.message ||
-          (response.status === 404 ? 'Room not found. Check the 4-letter code and try again.' : 'Could not join room.')
+          (response.status === 404 ? 'Room not found. Check the 6-character code and try again.' : 'Could not join room.')
         )
       }
       onJoin({
@@ -405,20 +405,21 @@ function EntryScreen({ onJoin }) {
     }
   }
 
-  const codeChars = [code[0] || '', code[1] || '', code[2] || '', code[3] || '']
+  const codeChars = [code[0] || '', code[1] || '', code[2] || '', code[3] || '', code[4] || '', code[5] || '']
 
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
-      {/* Top Header */}
-      <header className="flex justify-between items-center max-w-7xl w-full mx-auto mb-6 sm:mb-12">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
-            <UtensilsCrossed size={18} />
-          </div>
-          <span className="font-bold text-xl tracking-tight leading-none">food finder</span>
+      {/* Top Header with official logo seamlessly integrated */}
+      <header className="flex justify-between items-center max-w-5xl w-full mx-auto mb-6 sm:mb-8">
+        <div className="flex items-center">
+          <img
+            src="/food-finder-logo.png"
+            alt="Food Finder Logo"
+            className="h-12 sm:h-16 object-contain"
+          />
         </div>
-        <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3 py-1 bg-white">
-          <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+        <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+          <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></div>
           <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 01</span>
         </div>
       </header>
@@ -440,10 +441,13 @@ function EntryScreen({ onJoin }) {
             </p>
           </div>
 
-          <div className="mt-12">
+          <div className="mt-12 flex items-center justify-between">
             <div className="w-12 h-12 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
               <UtensilsCrossed size={22} />
             </div>
+            <span className="text-[10px] font-mono tracking-widest uppercase text-white/40">
+              FAST · LIVE · FAIR
+            </span>
           </div>
         </section>
 
@@ -499,7 +503,7 @@ function EntryScreen({ onJoin }) {
             <button
               type="button"
               onClick={() => {
-                if (code.length === 4) {
+                if (code.length === 6) {
                   handleJoin()
                 } else {
                   setIsJoinOpen(!isJoinOpen)
@@ -508,19 +512,19 @@ function EntryScreen({ onJoin }) {
               disabled={busy}
               className="w-full bg-green-400 hover:bg-green-300 disabled:opacity-50 text-navy-900 border-2 border-navy-900 rounded-2xl py-4 px-6 flex items-center justify-between text-lg font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-all"
             >
-              <span>{code.length === 4 && name.trim() ? 'Join Room Now' : 'Join Room'}</span>
+              <span>{code.length === 6 && name.trim() ? 'Join Room Now' : 'Join Room'}</span>
               <ChevronDown size={22} className={isJoinOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
             </button>
 
-            {/* 4-Character Room Code Box Input */}
+            {/* 6-Character Room Code Box Input */}
             {isJoinOpen && (
               <div className="space-y-2 pt-2 animate-fadeIn">
                 <div className="flex justify-between items-center text-xs font-mono font-bold uppercase tracking-wider text-navy-900/60">
-                  <span>02 / 4-CHARACTER ROOM CODE</span>
+                  <span>02 / 6-CHARACTER ROOM CODE</span>
                   <CornerDownLeft size={16} />
                 </div>
 
-                {/* 4 Boxes with hidden overlay input */}
+                {/* 6 Boxes with hidden overlay input */}
                 <div className="relative">
                   <input
                     type="text"
@@ -529,18 +533,18 @@ function EntryScreen({ onJoin }) {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') handleJoin()
                     }}
-                    maxLength={4}
+                    maxLength={6}
                     autoCapitalize="characters"
                     autoCorrect="off"
                     spellCheck="false"
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 font-mono"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 font-mono tracking-widest text-center"
                     autoFocus
                   />
-                  <div className="grid grid-cols-4 gap-3">
-                    {[0, 1, 2, 3].map((idx) => (
+                  <div className="grid grid-cols-6 gap-2 sm:gap-2.5">
+                    {[0, 1, 2, 3, 4, 5].map((idx) => (
                       <div
                         key={idx}
-                        className={`h-16 sm:h-18 rounded-2xl border-2 border-navy-900 bg-white flex items-center justify-center font-mono font-black text-2xl sm:text-3xl uppercase transition-colors
+                        className={`h-14 sm:h-16 rounded-xl sm:rounded-2xl border-2 border-navy-900 bg-white flex items-center justify-center font-mono font-black text-xl sm:text-2xl uppercase transition-colors
                           ${codeChars[idx] ? 'text-navy-900 bg-white' : 'text-navy-900/20 bg-background/50'}
                           ${code.length === idx ? 'ring-2 ring-orange-500' : ''}
                         `}
@@ -552,9 +556,9 @@ function EntryScreen({ onJoin }) {
                 </div>
 
                 <p className="text-xs font-mono text-navy-900/60 pt-1">
-                  {code.length === 4
+                  {code.length === 6
                     ? 'Code entered. Hit Join Room to pull up a chair.'
-                    : 'Enter the 4-letter room code shared by your host.'}
+                    : 'Enter the 6-character room code shared by your host.'}
                 </p>
               </div>
             )}
@@ -710,6 +714,35 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   const submittedCount = lobby.members.filter((m) => m.has_submitted).length
   const totalCount = lobby.members.length
   const readyPercentage = totalCount === 0 ? 0 : (submittedCount / totalCount) * 100
+
+  // Dynamic Consensus Calculation: updates live as participants lock in cravings
+  const liveWeightsList = (() => {
+    const backendPositive = lobby?.consensus_data?.positive_weights
+    if (backendPositive && Object.keys(backendPositive).length > 0) {
+      return Object.entries(backendPositive)
+        .map(([trait, weight]) => ({ trait, weight: Number(weight) }))
+        .sort((a, b) => b.weight - a.weight)
+    }
+
+    const traitCounts = {}
+    lobby.members.forEach((member) => {
+      if (!member.has_submitted) return
+      const prefs = member.preferences
+      const cravings = prefs?.desired_cuisines || prefs?.cuisines || []
+      cravings.forEach((c) => {
+        const norm = String(c || '').trim()
+        if (norm && norm.toLowerCase() !== 'anything') {
+          traitCounts[norm] = (traitCounts[norm] || 0) + 1.0
+        }
+      })
+    })
+
+    return Object.entries(traitCounts)
+      .map(([trait, weight]) => ({ trait, weight }))
+      .sort((a, b) => b.weight - a.weight)
+  })()
+
+  const maxLiveWeight = Math.max(...liveWeightsList.map((w) => w.weight), 1)
 
   // Colors for member avatars
   const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
@@ -968,19 +1001,6 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
 
         {/* Right Sidebar */}
         <div className="w-full lg:w-80 flex flex-col gap-6">
-          {/* Room Code Card */}
-          <div className="bg-navy-900 text-white rounded-3xl p-6 sm:p-8 border-2 border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-            <div className="text-xs font-mono font-bold tracking-widest uppercase text-white/60 mb-2">ROOM CODE</div>
-            <p className="text-sm text-white/80 mb-4">Share with the crew</p>
-            <div
-              onClick={handleCopyCode}
-              className="flex items-center justify-between cursor-pointer group"
-            >
-              <span className="text-5xl font-black text-green-400 tracking-widest font-mono">{lobby.lobby_code}</span>
-              <Copy size={24} className="text-white/60 group-hover:text-white transition-colors" />
-            </div>
-          </div>
-
           {/* Ready Status Card */}
           <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 sm:p-8 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
             <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-6">READY STATUS</div>
@@ -995,6 +1015,55 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
                 ? 'All players are ready!'
                 : `${submittedCount} of ${totalCount} players are ready. ${me?.has_submitted ? 'Waiting for the rest of the crew.' : 'You are still choosing.'}`}
             </p>
+          </div>
+
+          {/* Dynamic Live Consensus Weights Card */}
+          <div className="bg-card border-2 border-navy-900 rounded-3xl p-6 sm:p-7 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
+            <div className="flex items-center justify-between mb-4">
+              <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 flex items-center gap-1.5">
+                <Scale size={14} className="text-green-600" />
+                <span>CONSENSUS WEIGHTS</span>
+              </div>
+              <span className="flex items-center gap-1 text-[10px] font-mono font-bold text-green-800 bg-green-100 px-2 py-0.5 rounded-full border border-green-300">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                LIVE
+              </span>
+            </div>
+
+            {liveWeightsList.length === 0 ? (
+              <div className="bg-white/70 border border-navy-900/10 rounded-2xl p-4 text-center">
+                <p className="text-xs font-mono text-navy-900/60">
+                  Weights calculate dynamically as participants lock in their cravings.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
+                {liveWeightsList.map((item, idx) => {
+                  const percent = Math.min(100, Math.round((item.weight / maxLiveWeight) * 100))
+                  return (
+                    <div key={idx} className="space-y-1">
+                      <div className="flex justify-between items-center text-xs">
+                        <span className="font-bold text-navy-900 capitalize font-mono flex items-center gap-1.5">
+                          <span className="w-4 h-4 rounded-full bg-navy-900 text-white text-[9px] flex items-center justify-center font-bold">
+                            #{idx + 1}
+                          </span>
+                          {item.trait}
+                        </span>
+                        <span className="font-mono font-bold text-[11px] text-green-800 bg-green-100 px-2 py-0.5 rounded border border-green-300">
+                          +{Number(item.weight).toFixed(1)} pts
+                        </span>
+                      </div>
+                      <div className="h-2.5 bg-navy-900/10 rounded-full overflow-hidden border border-navy-900/20">
+                        <div
+                          className="h-full bg-green-400 rounded-full transition-all duration-500"
+                          style={{ width: `${percent}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
 
           {/* Consensus Math Inspector */}

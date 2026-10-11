@@ -202,13 +202,39 @@ class LobbyManager:
             if preferences.get("location"):
                 lobby.members[member_id].location = preferences["location"]
             lobby.members[member_id].preferences = preferences
+            self._update_live_consensus(lobby)
             return self._state(lobby)
 
     async def unlock_preferences(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
         async with lobby.lock:
             self._member_for_action(lobby, member_id, "preferences")
             lobby.members[member_id].preferences = None
+            self._update_live_consensus(lobby)
             return self._state(lobby)
+
+    def _update_live_consensus(self, lobby: Lobby) -> None:
+        submitted_prefs = [
+            m.preferences for m in lobby.members.values() if m.preferences is not None
+        ]
+        if not submitted_prefs:
+            lobby.consensus_data = None
+            return
+        try:
+            from engine import calculate_consensus_vector
+            weights = calculate_consensus_vector(submitted_prefs)
+            vetoes_and_allergies = []
+            for p in submitted_prefs:
+                for v in p.get("vetoed_cuisines", []):
+                    vetoes_and_allergies.append({"trait": v, "weight": -100, "is_allergy": False})
+                for a in p.get("allergies", []):
+                    vetoes_and_allergies.append({"trait": a, "weight": -50, "is_allergy": True})
+            lobby.consensus_data = {
+                "positive_weights": weights,
+                "vetoes_and_allergies": vetoes_and_allergies,
+                "is_live_draft": True,
+            }
+        except Exception as exc:
+            logger.warning("Error calculating live consensus vector: %s", exc)
 
     async def start_voting(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
         async with lobby.lock:
@@ -382,7 +408,7 @@ class LobbyManager:
                     "connected": item.id in lobby.sockets,
                     "has_submitted": item.preferences is not None,
                     "has_voted": bool(item.vote),
-                    "preferences": item.preferences if lobby.phase in {"voting", "results"} else None,
+                    "preferences": item.preferences,
                 }
                 for item in lobby.members.values()
             ],
