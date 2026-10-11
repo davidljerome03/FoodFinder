@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_LOCATION = {"lat": 28.5383, "lng": -81.3792}
 PRICE_VALUES = {"$", "$$", "$$$", "$$$$"}
-SUPPORTED_CUISINES = {"american", "asian", "bbq", "breakfast", "burgers", "chinese", "curry", "dim sum", "european", "french", "greek", "healthy", "indian", "italian", "japanese", "mediterranean", "mexican", "pho", "pizza", "ramen", "seafood", "soup", "steak", "sushi", "tacos", "thai", "vegan", "vietnamese"}
+SUPPORTED_CUISINES = {"american", "asian", "bbq", "breakfast", "burgers", "chinese", "curry", "dim sum", "european", "fast food", "fast_food", "french", "greek", "healthy", "indian", "italian", "japanese", "mediterranean", "mexican", "pho", "pizza", "ramen", "seafood", "soup", "steak", "sushi", "tacos", "thai", "vegan", "vietnamese"}
 LOCAL_ORIGINS = {"http://localhost:5173", "http://127.0.0.1:5173"}
 ALLOWED_ORIGINS = LOCAL_ORIGINS | {item.strip().rstrip("/") for item in os.getenv("ALLOWED_ORIGINS", "https://foodfinder.davidjerome.dev").split(",") if item.strip()}
 

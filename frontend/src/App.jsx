@@ -4,7 +4,7 @@ import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, 
 
 const SESSION_KEY = 'food-finder-lobby-member'
 const prices = ['$', '$$', '$$$', '$$$$']
-const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Burgers', 'Thai', 'Pizza', 'Seafood', 'Anything']
+const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Fast Food', 'Burgers', 'Thai', 'Pizza', 'Seafood', 'Anything']
 const defaultAllergies = ['Gluten / Celiac', 'Dairy / Lactose', 'Peanuts / Nuts', 'Shellfish', 'Seafood', 'Vegetarian', 'Vegan']
 const defaultLocation = { lat: 28.5383, lng: -81.3792 }
 const fallbackImage = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000'
@@ -738,6 +738,9 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       setSelectedCuisines(withoutAnything.filter((c) => c.toLowerCase() !== norm))
     } else {
       setSelectedCuisines([...withoutAnything, raw])
+      if (norm === 'fast food' && !selectedPrices.includes('$')) {
+        setSelectedPrices((prev) => [...prev, '$'])
+      }
     }
   }
 

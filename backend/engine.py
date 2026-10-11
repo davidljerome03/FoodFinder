@@ -169,8 +169,18 @@ CUISINE_SYNONYMS: Dict[str, set[str]] = {
     "pizza": {"pizza", "pizzeria", "slice", "pies"},
     "sushi": {"sushi", "sashimi", "nigiri", "maki", "roll", "japanese", "raw_fish"},
     "japanese": {"japanese", "sushi", "ramen", "izakaya", "hibachi", "teriyaki", "udon"},
-    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "patty"},
-    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "patty"},
+    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "fast_food", "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "in_n_out", "five_guys", "shake_shack", "culvers", "culver", "sonic", "jack_in_the_box", "whataburger", "hardees", "carls_jr", "white_castle"},
+    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "fast_food", "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "in_n_out", "five_guys", "shake_shack", "culvers", "culver", "sonic", "jack_in_the_box", "whataburger", "hardees", "carls_jr", "white_castle"},
+    "fast_food": {
+        "fast_food", "fastfood", "fast_food_restaurant", "quick_service", "drive_thru", "drive_through",
+        "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "taco_bell", "chick_fil_a", "chickfila",
+        "subway", "popeyes", "popeye", "kfc", "kentucky_fried_chicken", "arbys", "arby", "sonic",
+        "culvers", "culver", "five_guys", "shake_shack", "in_n_out", "jack_in_the_box", "raising_canes",
+        "canes", "dairy_queen", "panda_express", "hardees", "hardee", "carls_jr", "whataburger",
+        "white_castle", "del_taco", "churchs_chicken", "churchs", "zaxbys", "zaxby", "wingstop",
+        "jimmy_johns", "jersey_mikes", "firehouse_subs", "little_caesars", "dominos", "pizza_hut",
+        "papa_johns", "burger", "burgers", "fries", "nuggets", "tenders", "value_meal",
+    },
     "thai": {"thai", "pad_thai", "pad thai", "curry", "siamese"},
     "seafood": {"seafood", "fish", "crab", "lobster", "oyster", "shrimp", "clam"},
     "chinese": {"chinese", "dim_sum", "dim sum", "dumpling", "wok", "cantonese", "szechuan"},
@@ -182,7 +192,7 @@ CUISINE_SYNONYMS: Dict[str, set[str]] = {
     "bakery": {"bakery", "bake", "pastry", "bagel", "donut", "doughnut"},
     "dessert": {"dessert", "ice_cream", "ice cream", "sweet", "crepe"},
     "cafe": {"cafe", "coffee", "espresso", "bistro"},
-    "american": {"american", "diner", "traditional_american", "new_american", "wings", "sports_bar"},
+    "american": {"american", "diner", "traditional_american", "new_american", "wings", "sports_bar", "fast_food"},
     "latin_american": {"latin_american", "hispanic", "arepas", "empanadas"},
 }
 
@@ -263,11 +273,17 @@ def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
 
 
 def format_cuisine_type(place_type: str) -> str:
-    """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican')."""
-    name = str(place_type).lower()
-    for suffix in ["_restaurant", "_food", "_store"]:
+    """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican', 'fast_food_restaurant' -> 'Fast Food')."""
+    raw = str(place_type).lower().strip()
+    if raw in {"fast_food", "fast_food_restaurant"}:
+        return "Fast Food"
+    name = raw
+    for suffix in ["_restaurant", "_store", "_place", "_bar", "_house", "_grill"]:
         if name.endswith(suffix):
             name = name[:-len(suffix)]
+            break
+    if name != "fast" and name.endswith("_food"):
+        name = name[:-len("_food")]
     words = name.replace("_", " ").split()
     return " ".join(w.capitalize() for w in words)
 
@@ -330,16 +346,26 @@ def _parse_place_item(
     display_name_obj = p.get("displayName") or {}
     name = str(display_name_obj.get("text") or "Unknown Restaurant")
 
+    raw_types = p.get("types") or []
+    name_clean = name.lower()
+    is_fast_food = any("fast_food" in str(t).lower() for t in raw_types) or any(
+        brand in name_clean
+        for brand in ["mcdonald", "wendy", "burger king", "taco bell", "chick-fil-a", "subway", "popeye", "kfc", "arby", "sonic", "culver", "in-n-out", "jack in the box", "raising cane", "dairy queen", "panda express", "whataburger", "white castle", "del taco", "little caesar", "domino", "pizza hut"]
+    )
+
     raw_price = p.get("priceLevel")
     if raw_price:
-        price = PRICE_MAP.get(str(raw_price), default_price or "$$")
+        price = PRICE_MAP.get(str(raw_price), default_price or ("$" if is_fast_food else "$$"))
     elif default_price:
         price = default_price
+    elif is_fast_food:
+        price = "$"
     else:
         price = "$$"
 
-    raw_types = p.get("types") or []
     cuisines = extract_cuisines(raw_types, name=name, hint_cuisine=hint_cuisine)
+    if is_fast_food and "Fast Food" not in cuisines:
+        cuisines.append("Fast Food")
 
     coords = extract_coords(p.get("location"), location)
 
@@ -398,8 +424,11 @@ def search_places_by_text(
         "X-Goog-Api-Key": api_key,
         "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
     }
+    clean_q = query.strip()
+    q_lower = clean_q.lower()
+    text_query = clean_q if any(term in q_lower for term in ["restaurant", "food", "place", "bar", "grill", "cafe", "drive"]) else f"{clean_q} restaurant"
     body: Dict[str, Any] = {
-        "textQuery": f"{query} restaurant",
+        "textQuery": text_query,
         "locationBias": {
             "circle": {
                 "center": {
@@ -456,7 +485,7 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
     }
 
     body = {
-        "includedTypes": ["restaurant"],
+        "includedTypes": ["restaurant", "fast_food_restaurant"],
         "maxResultCount": 20,
         "locationRestriction": {
             "circle": {
@@ -758,6 +787,15 @@ def recommend_restaurants(
     if not allowed_prices:
         allowed_prices = {"$$"}  # Default fallback if unspecified
 
+    # If group cravings include fast food, ensure "$" is allowed so fast food spots aren't blocked
+    all_desired = [
+        str(cuisine).strip().lower()
+        for request in mood_requests
+        for cuisine in request.get("desired_cuisines", [])
+    ]
+    if any("fast" in c for c in all_desired):
+        allowed_prices.add("$")
+
     # Map to Google Places API (New) priceLevel filter enums
     target_google_prices = [
         gp
@@ -770,11 +808,6 @@ def recommend_restaurants(
     midpoint = calculate_geographic_midpoint(member_locations, fallback=group_location)
 
     # Determine if the group voted for 'anything' wildcard
-    all_desired = [
-        str(cuisine).strip().lower()
-        for request in mood_requests
-        for cuisine in request.get("desired_cuisines", [])
-    ]
     is_wildcard = (len(all_desired) == 0) or all(c == "anything" for c in all_desired)
 
     # Calculate consensus vector
@@ -791,7 +824,7 @@ def recommend_restaurants(
 
     # If the group has specific cravings, check if raw_restaurants contains enough matching places
     # that ALSO match allowed_prices!
-    # If not, perform targeted search_places_by_text for the requested cuisines filtered by priceLevels!
+    # If not, perform targeted search_places_by_text for the requested cuisines!
     if not is_wildcard and positive_desired:
         for craving in positive_desired[:3]:
             match_count = sum(
@@ -800,11 +833,13 @@ def recommend_restaurants(
                 and any(traits_overlap(c, craving) for c in r.get("cuisines", []))
             )
             if match_count < 3:
+                craving_is_fast_food = "fast" in craving.lower() or "quick" in craving.lower()
+                c_default_price = "$" if craving_is_fast_food else (next(iter(allowed_prices)) if len(allowed_prices) == 1 else None)
                 targeted_places = search_places_by_text(
                     craving,
                     midpoint,
-                    price_levels=target_google_prices if target_google_prices else None,
-                    default_price=next(iter(allowed_prices)) if len(allowed_prices) == 1 else None,
+                    price_levels=target_google_prices if (target_google_prices and not craving_is_fast_food) else None,
+                    default_price=c_default_price,
                 )
                 for tp in targeted_places:
                     if tp["id"] not in existing_ids:
@@ -820,7 +855,7 @@ def recommend_restaurants(
             elif allowed_prices == {"$$$"}:
                 price_query = "upscale restaurant"
             elif allowed_prices == {"$"}:
-                price_query = "casual dining restaurant"
+                price_query = "fast food restaurant"
 
             targeted_places = search_places_by_text(
                 price_query,
