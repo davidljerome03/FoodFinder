@@ -36,6 +36,7 @@ class Member:
     is_host: bool = False
     preferences: dict[str, Any] | None = None
     vote: str | None = None
+    location: dict[str, float] | None = None
 
 
 @dataclass
@@ -66,12 +67,13 @@ class LobbyManager:
         return "".join(secrets.choice(alphabet) for _ in range(6))
 
     @staticmethod
-    def _new_member(name: str, is_host: bool = False) -> Member:
+    def _new_member(name: str, is_host: bool = False, location: dict[str, float] | None = None) -> Member:
         return Member(
             id=uuid.uuid4().hex,
             name=name,
             token=secrets.token_urlsafe(32),
             is_host=is_host,
+            location=location,
         )
 
     async def create_lobby(self, name: str, location: dict[str, float]) -> tuple[Lobby, Member]:
@@ -79,20 +81,20 @@ class LobbyManager:
             code = self._code()
             while code in self._lobbies:
                 code = self._code()
-            host = self._new_member(name, is_host=True)
+            host = self._new_member(name, is_host=True, location=location)
             lobby = Lobby(code=code, location=location, host_id=host.id, members={host.id: host})
             lobby.last_empty_at = time.monotonic()
             self._lobbies[code] = lobby
             return lobby, host
 
-    async def join_lobby(self, code: str, name: str) -> tuple[Lobby, Member]:
+    async def join_lobby(self, code: str, name: str, location: dict[str, float] | None = None) -> tuple[Lobby, Member]:
         lobby = await self.get_lobby(code)
         async with lobby.lock:
             if lobby.phase != "preferences":
                 raise LobbyError("LOBBY_CLOSED", "Voting has already started.", 409)
             if len(lobby.members) >= MAX_MEMBERS:
                 raise LobbyError("LOBBY_FULL", "This lobby already has 12 members.", 409)
-            member = self._new_member(name)
+            member = self._new_member(name, location=location)
             lobby.members[member.id] = member
             return lobby, member
 
@@ -155,6 +157,8 @@ class LobbyManager:
     async def submit_preferences(self, lobby: Lobby, member_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
         async with lobby.lock:
             self._member_for_action(lobby, member_id, "preferences")
+            if preferences.get("location"):
+                lobby.members[member_id].location = preferences["location"]
             lobby.members[member_id].preferences = preferences
             return self._state(lobby)
 
@@ -172,7 +176,11 @@ class LobbyManager:
             if any(item.preferences is None for item in lobby.members.values()):
                 raise LobbyError("PREFERENCES_INCOMPLETE", "All members must submit preferences before voting starts.")
             preferences = [
-                {**item.preferences, "name": item.name}
+                {
+                    **item.preferences,
+                    "name": item.name,
+                    "location": item.preferences.get("location") or item.location or lobby.location,
+                }
                 for item in lobby.members.values()
                 if item.preferences
             ]

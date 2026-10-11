@@ -424,7 +424,10 @@ function WeightsInspector({ consensusData, members }) {
                       <div className="font-mono font-bold text-xs bg-navy-900 text-white px-2 py-1 rounded-lg">
                         Final Score: {Number(cand.final_score || 0).toFixed(2)} pts
                       </div>
-                      <div className="font-mono text-[10px] text-navy-900/70 mt-1">
+                      <div className="font-mono text-[10px] text-navy-900/70 mt-1 md:text-right">
+                        {cand.distance_miles != null && (
+                          <span className="mr-1.5 font-bold">📍 {cand.distance_miles} mi</span>
+                        )}
                         {cand.formula || `+${cand.match_score} match - ${cand.distance_penalty} dist`}
                       </div>
                     </div>
@@ -480,6 +483,7 @@ function EntryScreen({ onJoin }) {
         memberId: data.member_id,
         memberToken: data.member_token,
         name: name.trim(),
+        location,
       })
     } catch (err) {
       setError(err.message)
@@ -496,7 +500,7 @@ function EntryScreen({ onJoin }) {
       const response = await fetch(`/api/lobbies/${encodeURIComponent(code.trim().toUpperCase())}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim() }),
+        body: JSON.stringify({ name: name.trim(), location }),
       })
       const data = await response.json()
       if (!response.ok) throw new Error(data.detail?.message || data.detail || 'Could not join lobby.')
@@ -505,6 +509,7 @@ function EntryScreen({ onJoin }) {
         memberId: data.member_id,
         memberToken: data.member_token,
         name: name.trim(),
+        location,
       })
     } catch (err) {
       setError(err.message)
@@ -599,6 +604,21 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   const [customAllergyInput, setCustomAllergyInput] = useState('')
   const [availableCuisines, setAvailableCuisines] = useState(defaultCuisines)
   const [availableAllergies, setAvailableAllergies] = useState(defaultAllergies)
+  const [userLocation, setUserLocation] = useState(session?.location || defaultLocation)
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        },
+        () => {}
+      )
+    }
+  }, [])
 
   const me = lobby?.members?.find((m) => m.id === session.memberId)
   const isHost = lobby?.host_id === session.memberId
@@ -683,6 +703,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       vetoed_cuisines: [],
       allergies: selectedAllergies,
       max_price: selectedPrice,
+      location: userLocation,
     })
   }
 
@@ -1156,6 +1177,17 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                   </div>
                 )}
 
+                {/* Allergy Conflict Badge */}
+                {restaurant._debug_stats?.allergy_penalty > 0 && (
+                  <div className="mb-2 bg-red-100 text-red-900 border border-red-300 text-[10px] font-mono font-bold px-2 py-1 rounded-lg flex items-center gap-1.5">
+                    <ShieldAlert size={14} className="text-red-600 shrink-0" />
+                    <span>
+                      ⚠️ Allergy Penalty: -{restaurant._debug_stats.allergy_penalty} pts
+                      {restaurant._debug_stats.conflicted_allergies?.length > 0 && ` (${restaurant._debug_stats.conflicted_allergies.join(', ')})`}
+                    </span>
+                  </div>
+                )}
+
                 {restaurant.address && (
                   <div className="flex items-start gap-1.5 text-xs text-navy-900/70 font-medium pt-2 border-t border-navy-900/10">
                     <MapPin size={14} className="shrink-0 mt-0.5 text-orange-500" />
@@ -1166,10 +1198,18 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                 {/* Score and Distance Breakdown */}
                 {restaurant._debug_stats && (
                   <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex flex-col gap-1 border border-navy-900/10">
-                    <div className="flex items-center justify-between">
-                      <span className="text-orange-600">Score: {restaurant._debug_stats.final_score}</span>
-                      <span>+{restaurant._debug_stats.match_score} match / -{restaurant._debug_stats.distance_penalty} dist</span>
+                    <div className="flex items-center justify-between flex-wrap gap-1">
+                      <span className="text-orange-600 font-bold">Score: {restaurant._debug_stats.final_score} pts</span>
+                      <span className="text-navy-900/80">
+                        📍 {restaurant._debug_stats.distance_miles ?? '—'} mi (-{restaurant._debug_stats.distance_penalty} pts)
+                      </span>
                     </div>
+                    {restaurant._debug_stats.allergy_penalty > 0 && (
+                      <div className="text-[10px] text-red-600 font-bold flex items-center justify-between">
+                        <span>Allergy Conflict:</span>
+                        <span>-{restaurant._debug_stats.allergy_penalty} pts</span>
+                      </div>
+                    )}
                     {restaurant._debug_stats.formula && (
                       <div className="text-[10px] text-navy-900/60 font-medium">
                         {restaurant._debug_stats.formula}
@@ -1279,10 +1319,18 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                 )}
                 {winner?._debug_stats && (
                   <div className="mt-3 flex flex-col gap-1 text-xs font-mono font-bold bg-navy-900/5 px-3 py-2 rounded-xl border border-navy-900/10 text-navy-900/80">
-                    <div className="flex items-center gap-2">
-                      <span className="text-orange-600">Final Score: {winner._debug_stats.final_score}</span>
-                      <span>(+{winner._debug_stats.match_score} match / -{winner._debug_stats.distance_penalty} dist)</span>
+                    <div className="flex items-center gap-2 flex-wrap justify-between">
+                      <span className="text-orange-600">Final Score: {winner._debug_stats.final_score} pts</span>
+                      <span className="text-navy-900/70">
+                        📍 {winner._debug_stats.distance_miles ?? '—'} mi (-{winner._debug_stats.distance_penalty} pts)
+                      </span>
                     </div>
+                    {winner._debug_stats.allergy_penalty > 0 && (
+                      <div className="text-red-700 text-[11px] flex items-center gap-1">
+                        <ShieldAlert size={14} className="text-red-600 shrink-0" />
+                        <span>⚠️ Allergy Penalty: -{winner._debug_stats.allergy_penalty} pts ({winner._debug_stats.conflicted_allergies?.join(', ')})</span>
+                      </div>
+                    )}
                     {winner._debug_stats.formula && (
                       <div className="text-[11px] text-navy-900/60 font-medium">
                         {winner._debug_stats.formula}
@@ -1357,8 +1405,12 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                         </div>
                         <div className="text-xs text-navy-900/60">{c.cuisines?.join(' • ')}</div>
                         {c._debug_stats && (
-                          <div className="text-[10px] font-mono text-orange-600 font-bold">
-                            Score: {c._debug_stats.final_score}
+                          <div className="text-[10px] font-mono font-bold flex items-center gap-2 flex-wrap">
+                            <span className="text-orange-600">Score: {c._debug_stats.final_score}</span>
+                            <span className="text-navy-900/60">📍 {c._debug_stats.distance_miles} mi</span>
+                            {c._debug_stats.allergy_penalty > 0 && (
+                              <span className="text-red-600">⚠️ -{c._debug_stats.allergy_penalty} pts</span>
+                            )}
                           </div>
                         )}
                       </div>

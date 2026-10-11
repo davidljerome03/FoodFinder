@@ -88,29 +88,44 @@ def resolve_photo_url(photo_resource: str, api_key: str, cuisines: List[str]) ->
 
     return f"/api/photos?name={urllib.parse.quote(clean_name)}"
 
-# Dietary and Allergy Conflict Map (Nerfed to prevent over-vetoing broad cuisine families)
+# Dietary and Allergy Conflict Map (Soft-penalty conflict tags for dietary restrictions)
 ALLERGY_CONFLICTS: Dict[str, set[str]] = {
-    "seafood": {"seafood", "fish", "sushi", "shellfish", "crab", "lobster", "shrimp", "oyster", "clam"},
-    "fish": {"fish", "sushi", "raw_fish"},
-    "shellfish": {"shellfish", "crab", "lobster", "shrimp", "oyster", "clam"},
-    "peanuts": {"peanuts", "peanut"},
-    "peanut": {"peanuts", "peanut"},
-    "nuts": {"nuts", "tree_nuts", "walnut", "almond", "pecan"},
-    "tree nuts": {"nuts", "tree_nuts", "walnut", "almond", "pecan"},
-    "gluten": {"bakery"},
-    "celiac": {"bakery"},
-    "dairy": {"ice_cream"},
-    "lactose": {"ice_cream"},
-    "vegetarian": {"steakhouse", "bbq", "smokehouse"},
-    "vegan": {"steakhouse", "bbq", "smokehouse"},
+    "gluten": {"bakery", "bagel", "donut", "pastry", "pizza", "pizzeria", "pasta", "italian", "ramen", "noodle", "sandwich", "sandwiches", "bread"},
+    "celiac": {"bakery", "bagel", "donut", "pastry", "pizza", "pizzeria", "pasta", "italian", "ramen", "noodle", "sandwich", "sandwiches", "bread"},
+    "dairy": {"ice_cream", "ice cream", "gelato", "dessert", "pizza", "pizzeria", "cheese"},
+    "lactose": {"ice_cream", "ice cream", "gelato", "dessert", "pizza", "pizzeria", "cheese"},
+    "peanuts": {"thai", "vietnamese", "asian", "peanut", "peanuts", "satay"},
+    "peanut": {"thai", "vietnamese", "asian", "peanut", "peanuts", "satay"},
+    "nuts": {"thai", "vietnamese", "asian", "bakery", "pastry", "nuts", "tree_nuts"},
+    "tree nuts": {"thai", "vietnamese", "asian", "bakery", "pastry", "nuts", "tree_nuts"},
+    "shellfish": {"shellfish", "crab", "lobster", "shrimp", "oyster", "clam", "cajun", "seafood"},
+    "seafood": {"seafood", "fish", "sushi", "raw_fish", "shellfish", "crab", "lobster", "shrimp", "oyster", "clam"},
+    "fish": {"fish", "sushi", "raw_fish", "seafood"},
+    "vegetarian": {"steak", "steakhouse", "chophouse", "bbq", "barbecue", "smokehouse", "ribs"},
+    "vegan": {"steak", "steakhouse", "chophouse", "bbq", "barbecue", "smokehouse", "ribs"},
+    "pork": {"bbq", "barbecue", "smokehouse", "ribs", "pork", "bacon"},
 }
+
+
+def extract_coords(loc_obj: Any, fallback: Dict[str, float]) -> Dict[str, float]:
+    """Safely extracts lat/lng floats from any location or coordinates dictionary structure."""
+    if not isinstance(loc_obj, dict):
+        return {"lat": float(fallback.get("lat", 28.5383)), "lng": float(fallback.get("lng", -81.3792))}
+    lat = loc_obj.get("latitude") if loc_obj.get("latitude") is not None else loc_obj.get("lat")
+    lng = loc_obj.get("longitude") if loc_obj.get("longitude") is not None else loc_obj.get("lng")
+    try:
+        lat_f = float(lat) if lat is not None else float(fallback.get("lat", 28.5383))
+        lng_f = float(lng) if lng is not None else float(fallback.get("lng", -81.3792))
+        return {"lat": round(lat_f, 6), "lng": round(lng_f, 6)}
+    except (ValueError, TypeError):
+        return {"lat": float(fallback.get("lat", 28.5383)), "lng": float(fallback.get("lng", -81.3792))}
 
 
 def calculate_geographic_midpoint(locations: List[Dict[str, float]], fallback: Optional[Dict[str, float]] = None) -> Dict[str, float]:
     """
     Calculates the geographic midpoint (center of mass) of all group members' locations.
     """
-    valid = [loc for loc in locations if isinstance(loc, dict) and "lat" in loc and "lng" in loc]
+    valid = [extract_coords(loc, fallback or {"lat": 28.5383, "lng": -81.3792}) for loc in locations if isinstance(loc, dict)]
     if not valid:
         return fallback or {"lat": 28.5383, "lng": -81.3792}
     avg_lat = sum(loc["lat"] for loc in valid) / len(valid)
@@ -309,11 +324,7 @@ def _parse_place_item(p: Dict[str, Any], location: Dict[str, float], hint_cuisin
     raw_types = p.get("types") or []
     cuisines = extract_cuisines(raw_types, name=name, hint_cuisine=hint_cuisine)
 
-    loc = p.get("location") or {}
-    coords = {
-        "lat": float(loc.get("latitude") or location.get("lat", 28.5383)),
-        "lng": float(loc.get("longitude") or location.get("lng", -81.3792)),
-    }
+    coords = extract_coords(p.get("location"), location)
 
     address = str(p.get("formattedAddress") or "Address unavailable")
 
@@ -470,27 +481,35 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
         raise RuntimeError(f"Failed to query Google Places API: {exc}") from exc
 
 
+def parse_allergy_tokens(allergy: str) -> List[str]:
+    """Splits composite allergy labels (e.g. 'Gluten / Celiac', 'Peanuts / Nuts') into distinct tags."""
+    raw_tokens = re.split(r"[/,;&+]|\bor\b", str(allergy).lower())
+    tokens = []
+    for raw in raw_tokens:
+        clean = normalize_tag(raw)
+        if clean:
+            tokens.append(clean)
+    return tokens
+
+
 def get_allergy_conflict_tags(allergy: str) -> set[str]:
-    """Returns the normalized conflict tags for a specific allergy or restriction."""
-    a_clean = normalize_tag(allergy)
-    res = {a_clean}
-    for key, confs in ALLERGY_CONFLICTS.items():
-        if a_clean == key or (len(key) > 3 and a_clean.rstrip("s") == key.rstrip("s")):
-            res.update(confs)
-    return res
+    """Returns the normalized conflict tags for a specific allergy, handling composite strings."""
+    tokens = parse_allergy_tokens(allergy)
+    conflict_tags = set(tokens)
+    for token in tokens:
+        for key, confs in ALLERGY_CONFLICTS.items():
+            k_clean = normalize_tag(key)
+            if token == k_clean or (len(k_clean) > 3 and token.rstrip("s") == k_clean.rstrip("s")):
+                conflict_tags.update(confs)
+    return conflict_tags
 
 
 def restaurant_conflicts_with_allergy(cuisines: List[str], allergy: str) -> bool:
-    """Checks if a restaurant's cuisines conflict directly with a specific dietary restriction."""
+    """Checks if a restaurant's cuisines conflict with an allergy or dietary restriction."""
     conflict_tags = get_allergy_conflict_tags(allergy)
     for c in cuisines:
-        c_norm = normalize_tag(c)
-        if c_norm in conflict_tags:
-            return True
-        c_stem = c_norm.rstrip("s") if len(c_norm) > 3 else c_norm
         for tag in conflict_tags:
-            tag_stem = tag.rstrip("s") if len(tag) > 3 else tag
-            if c_norm == tag or c_stem == tag_stem:
+            if traits_overlap(c, tag):
                 return True
     return False
 
@@ -621,10 +640,10 @@ def score_restaurants(
                     allergy_penalty += 2.5
                     conflicted_allergies.append(format_cuisine_type(a_clean))
 
-        # 3. Distance Penalty (0.25 points per mile away)
-        coords = rest.get("coordinates", {})
-        rest_lat = coords.get("lat", group_location["lat"])
-        rest_lng = coords.get("lng", group_location["lng"])
+        # 3. Distance Penalty (0.25 points per mile away from midpoint)
+        coords = extract_coords(rest.get("coordinates"), group_location)
+        rest_lat = coords["lat"]
+        rest_lng = coords["lng"]
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
         distance_penalty = distance * 0.25
         final_score = dot_product_score - allergy_penalty - distance_penalty
@@ -643,6 +662,7 @@ def score_restaurants(
             "price_level": rest_price_level,
             "match_score": dot_product_score,
             "allergy_penalty": allergy_penalty,
+            "conflicted_allergies": conflicted_allergies,
             "distance_penalty": distance_penalty,
             "matched_traits": matching_traits,
             "formula": formula,
@@ -659,8 +679,9 @@ def score_restaurants(
             rest_data["_debug_stats"] = {
                 "match_score": round(item["match_score"], 2),
                 "allergy_penalty": round(item["allergy_penalty"], 2),
+                "conflicted_allergies": item["conflicted_allergies"],
                 "distance_penalty": round(item["distance_penalty"], 2),
-                "distance_miles": round(item["distance"], 2),
+                "distance_miles": round(item["distance"], 1),
                 "final_score": round(item["final_score"], 2),
                 "matched_traits": item["matched_traits"],
                 "formula": item["formula"],
@@ -823,6 +844,7 @@ def recommend_restaurants(
                 "final_score": r.get("_debug_stats", {}).get("final_score", 0),
                 "match_score": r.get("_debug_stats", {}).get("match_score", 0),
                 "allergy_penalty": r.get("_debug_stats", {}).get("allergy_penalty", 0),
+                "conflicted_allergies": r.get("_debug_stats", {}).get("conflicted_allergies", []),
                 "distance_miles": r.get("_debug_stats", {}).get("distance_miles", 0),
                 "distance_penalty": r.get("_debug_stats", {}).get("distance_penalty", 0),
                 "matched_traits": r.get("_debug_stats", {}).get("matched_traits", []),

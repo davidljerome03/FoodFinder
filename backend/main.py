@@ -45,11 +45,17 @@ class NameRequest(BaseModel):
 class CreateLobbyRequest(NameRequest):
     group_location: Location = Location(**DEFAULT_LOCATION)
 
+
+class JoinLobbyRequest(NameRequest):
+    location: Optional[Location] = None
+
+
 class UserPreference(BaseModel):
     desired_cuisines: list[str] = Field(default_factory=list, max_length=20)
     vetoed_cuisines: list[str] = Field(default_factory=list, max_length=20)
     allergies: list[str] = Field(default_factory=list, max_length=20)
     max_price: str = "$$"
+    location: Optional[Location] = None
 
     @field_validator("desired_cuisines", "vetoed_cuisines", "allergies")
     @classmethod
@@ -180,9 +186,10 @@ async def create_lobby(payload: CreateLobbyRequest):
 
 
 @app.post("/api/lobbies/{code}/join")
-async def join_lobby(code: str, payload: NameRequest):
+async def join_lobby(code: str, payload: JoinLobbyRequest):
     try:
-        lobby, member = await manager.join_lobby(code.upper(), payload.name)
+        loc_dict = payload.location.model_dump() if payload.location else None
+        lobby, member = await manager.join_lobby(code.upper(), payload.name, location=loc_dict)
     except LobbyError as error:
         raise HTTPException(error.status_code, detail={"code": error.code, "message": error.message}) from error
     return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}
