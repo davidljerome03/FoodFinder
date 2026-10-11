@@ -637,6 +637,12 @@ def _parse_place_item(
 
     address = str(p.get("formattedAddress") or "Address unavailable")
 
+    raw_rating = p.get("rating")
+    rating = round(float(raw_rating), 1) if raw_rating is not None else None
+
+    raw_user_rating_count = p.get("userRatingCount")
+    user_rating_count = int(raw_user_rating_count) if raw_user_rating_count is not None else None
+
     photos = p.get("photos") or []
     photo_resource = ""
     if isinstance(photos, list) and photos:
@@ -659,6 +665,9 @@ def _parse_place_item(
         "image_url": initial_image,
         "_photo_resource": photo_resource,
         "address": address,
+        "rating": rating,
+        "user_rating_count": user_rating_count,
+        "reviews_count": user_rating_count,
         "is_open": True,
     }
 
@@ -688,7 +697,7 @@ def search_places_by_text(
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount",
     }
     clean_q = query.strip()
     q_lower = clean_q.lower()
@@ -752,7 +761,7 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
     headers = {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": api_key,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress,places.rating,places.userRatingCount",
     }
 
     body = {
@@ -905,6 +914,17 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     return R * c
 
 
+def estimate_drive_time_minutes(distance_miles: float) -> int:
+    """
+    Estimates realistic driving time in minutes based on distance.
+    Assumes ~25 mph average driving speed (2.4 min/mi) plus a 1-2 min buffer for starting/parking.
+    """
+    d = max(0.0, float(distance_miles))
+    if d <= 0.2:
+        return 1
+    return max(1, round(d * 2.4 + 1.5))
+
+
 def score_restaurants(
     consensus_vector: Dict[str, float],
     restaurants: List[Dict[str, Any]],
@@ -1003,19 +1023,21 @@ def score_restaurants(
         rest_lng = coords["lng"]
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
         distance_penalty = calculate_distance_penalty(distance)
+        drive_mins = estimate_drive_time_minutes(distance)
         final_score = dot_product_score - allergy_penalty - distance_penalty
 
         formula_parts = [f"+{dot_product_score:.2f} (Match)"]
         if allergy_penalty > 0:
             conflict_str = ", ".join(conflicted_allergies)
             formula_parts.append(f"- {allergy_penalty:.2f} (Allergy: {conflict_str})")
-        formula_parts.append(f"- {distance_penalty:.2f} ({distance:.1f} mi)")
+        formula_parts.append(f"- {distance_penalty:.2f} ({distance:.1f} mi, ~{drive_mins}m drive)")
         formula = f"{' '.join(formula_parts)} = {final_score:.2f} pts"
 
         scored_restaurants.append({
             "restaurant": rest,
             "final_score": final_score,
             "distance": distance,
+            "drive_minutes": drive_mins,
             "price_level": rest_price_level,
             "match_score": dot_product_score,
             "allergy_penalty": allergy_penalty,
@@ -1032,13 +1054,30 @@ def score_restaurants(
     top_3: List[Dict[str, Any]] = []
     for item in scored_restaurants[:3]:
         rest_data = item["restaurant"].copy()
+        dist_rounded = round(item["distance"], 1)
+        drive_mins = item["drive_minutes"]
+        rest_data["distance_miles"] = dist_rounded
+        rest_data["drive_minutes"] = drive_mins
+        rest_data["drive_time_text"] = f"{drive_mins} min drive"
+        if "rating" not in rest_data:
+            rest_data["rating"] = None
+        if "user_rating_count" not in rest_data:
+            rest_data["user_rating_count"] = None
+        if "reviews_count" not in rest_data:
+            rest_data["reviews_count"] = rest_data.get("user_rating_count")
+
         if include_debug:
             rest_data["_debug_stats"] = {
                 "match_score": round(item["match_score"], 2),
                 "allergy_penalty": round(item["allergy_penalty"], 2),
                 "conflicted_allergies": item["conflicted_allergies"],
                 "distance_penalty": round(item["distance_penalty"], 2),
-                "distance_miles": round(item["distance"], 1),
+                "distance_miles": dist_rounded,
+                "drive_minutes": drive_mins,
+                "drive_time_text": f"{drive_mins} min drive",
+                "rating": rest_data.get("rating"),
+                "user_rating_count": rest_data.get("user_rating_count"),
+                "reviews_count": rest_data.get("reviews_count"),
                 "final_score": round(item["final_score"], 2),
                 "matched_traits": item["matched_traits"],
                 "formula": item["formula"],

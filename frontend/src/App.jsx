@@ -1329,10 +1329,32 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                         <h2 className="text-xl font-bold leading-tight">{restaurant.name}</h2>
                         <span className="text-base font-bold font-mono">{restaurant.price || '$$'}</span>
                       </div>
-                      <p className="text-xs font-bold text-navy-900/60 mb-3">
-                        {restaurant.cuisines?.join(' · ')} / {restaurant.rating || 4.8} ★
-                        {restaurant._debug_stats?.distance_miles != null && ` · ${Math.round(restaurant._debug_stats.distance_miles * 20)} min walk`}
-                      </p>
+                      <div className="text-xs font-bold text-navy-900/60 mb-3 flex flex-wrap items-center gap-1.5">
+                        <span>{restaurant.cuisines?.join(' · ')}</span>
+                        {restaurant.rating != null ? (
+                          <>
+                            <span>/</span>
+                            <span className="text-amber-600 font-extrabold flex items-center gap-0.5">
+                              ★ {Number(restaurant.rating).toFixed(1)}
+                              {(restaurant.user_rating_count != null || restaurant.reviews_count != null) && (
+                                <span className="text-navy-900/50 font-normal">
+                                  ({(restaurant.user_rating_count ?? restaurant.reviews_count).toLocaleString()})
+                                </span>
+                              )}
+                            </span>
+                          </>
+                        ) : null}
+                        {(restaurant.drive_minutes != null || restaurant._debug_stats?.drive_minutes != null) && (
+                          <>
+                            <span>·</span>
+                            <span className="text-navy-900/80 font-bold">
+                              🚗 {restaurant.drive_minutes ?? restaurant._debug_stats?.drive_minutes} min drive
+                              {(restaurant.distance_miles != null || restaurant._debug_stats?.distance_miles != null) &&
+                                ` (${restaurant.distance_miles ?? restaurant._debug_stats?.distance_miles} mi)`}
+                            </span>
+                          </>
+                        )}
+                      </div>
 
                       {/* Matched Trait Badges */}
                       {restaurant._debug_stats?.matched_traits && restaurant._debug_stats.matched_traits.length > 0 && (
@@ -1475,7 +1497,10 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
   }
 
   const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
-  const walkMinutes = winner?._debug_stats?.distance_miles != null ? Math.round(winner._debug_stats.distance_miles * 20) : 8
+  const driveMinutes = winner?.drive_minutes ?? winner?._debug_stats?.drive_minutes ?? (winner?._debug_stats?.distance_miles != null ? Math.max(1, Math.round(winner._debug_stats.distance_miles * 2.4 + 1.5)) : 5)
+  const winnerDistance = winner?.distance_miles ?? winner?._debug_stats?.distance_miles
+  const winnerRating = winner?.rating ?? winner?._debug_stats?.rating
+  const winnerReviewCount = winner?.user_rating_count ?? winner?.reviews_count ?? winner?._debug_stats?.user_rating_count
 
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
@@ -1530,9 +1555,20 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
             <div className="p-6 sm:p-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl sm:text-4xl font-bold mb-1">{winner?.name || 'Selected Restaurant'}</h2>
-                <p className="text-base sm:text-lg font-bold text-navy-900/80">
-                  {winner?.cuisines?.join(' · ')} / {winner?.rating || 4.8} ★ ({winner?.reviews_count || 286} reviews)
-                </p>
+                <div className="text-base sm:text-lg font-bold text-navy-900/80 flex flex-wrap items-center gap-2">
+                  <span>{winner?.cuisines?.join(' · ')}</span>
+                  {winnerRating != null ? (
+                    <>
+                      <span>/</span>
+                      <span className="text-amber-600 font-extrabold flex items-center gap-1">
+                        ★ {Number(winnerRating).toFixed(1)}
+                        {winnerReviewCount != null && (
+                          <span className="text-navy-900/60 font-semibold">({winnerReviewCount.toLocaleString()} reviews)</span>
+                        )}
+                      </span>
+                    </>
+                  ) : null}
+                </div>
               </div>
               <div className="text-2xl sm:text-3xl font-bold tracking-widest font-mono">{winner?.price || '$$'}</div>
             </div>
@@ -1546,7 +1582,9 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
             <div className="space-y-3 font-bold text-base">
               <div className="flex items-center gap-3">
                 <MapPin size={22} className="shrink-0 text-navy-900" />
-                <span>{winner?.address || '124 Valencia St'} • {walkMinutes} min walk</span>
+                <span>
+                  {winner?.address || '124 Valencia St'} • 🚗 {driveMinutes} min drive{winnerDistance != null ? ` (${winnerDistance} mi)` : ''}
+                </span>
               </div>
               <div className="flex items-center gap-3">
                 <Clock size={22} className="shrink-0 text-navy-900" />
@@ -1618,7 +1656,21 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
                           </span>
                           <span className="font-bold text-sm">{c.name}</span>
                         </div>
-                        <div className="text-xs text-navy-900/60">{c.cuisines?.join(' · ')}</div>
+                        <div className="text-xs text-navy-900/60 flex flex-wrap items-center gap-1.5 mt-0.5">
+                          <span>{c.cuisines?.join(' · ')}</span>
+                          {c.rating != null && (
+                            <>
+                              <span>•</span>
+                              <span className="text-amber-600 font-bold">★ {Number(c.rating).toFixed(1)}</span>
+                            </>
+                          )}
+                          {(c.drive_minutes != null || c._debug_stats?.drive_minutes != null) && (
+                            <>
+                              <span>•</span>
+                              <span>🚗 {c.drive_minutes ?? c._debug_stats?.drive_minutes} min drive</span>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
                     <button
@@ -1680,8 +1732,8 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
                 <span className="text-orange-500 uppercase">UNANIMOUS</span>
               </div>
               <div className="flex justify-between py-1">
-                <span className="text-navy-900/70">Walk time</span>
-                <span>{walkMinutes} min</span>
+                <span className="text-navy-900/70">Drive time</span>
+                <span>🚗 {driveMinutes} min</span>
               </div>
             </div>
           </div>
