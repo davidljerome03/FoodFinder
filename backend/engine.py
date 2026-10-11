@@ -146,6 +146,13 @@ PRICE_MAP: Dict[str, str] = {
     "$$$$": "$$$$",
 }
 
+TIER_TO_GOOGLE_PRICE: Dict[str, List[str]] = {
+    "$": ["PRICE_LEVEL_INEXPENSIVE", "PRICE_LEVEL_FREE"],
+    "$$": ["PRICE_LEVEL_MODERATE"],
+    "$$$": ["PRICE_LEVEL_EXPENSIVE"],
+    "$$$$": ["PRICE_LEVEL_VERY_EXPENSIVE"],
+}
+
 IGNORED_PLACE_TYPES = {
     "point_of_interest",
     "establishment",
@@ -309,7 +316,12 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
     return cuisines if cuisines else ["Restaurant"]
 
 
-def _parse_place_item(p: Dict[str, Any], location: Dict[str, float], hint_cuisine: str = "") -> Optional[Dict[str, Any]]:
+def _parse_place_item(
+    p: Dict[str, Any],
+    location: Dict[str, float],
+    hint_cuisine: str = "",
+    default_price: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Helper to parse a single Google Places (New) place object into our API contract."""
     place_id = str(p.get("id") or "")
     if not place_id:
@@ -318,8 +330,13 @@ def _parse_place_item(p: Dict[str, Any], location: Dict[str, float], hint_cuisin
     display_name_obj = p.get("displayName") or {}
     name = str(display_name_obj.get("text") or "Unknown Restaurant")
 
-    raw_price = p.get("priceLevel") or "PRICE_LEVEL_MODERATE"
-    price = PRICE_MAP.get(str(raw_price), "$$")
+    raw_price = p.get("priceLevel")
+    if raw_price:
+        price = PRICE_MAP.get(str(raw_price), default_price or "$$")
+    elif default_price:
+        price = default_price
+    else:
+        price = "$$"
 
     raw_types = p.get("types") or []
     cuisines = extract_cuisines(raw_types, name=name, hint_cuisine=hint_cuisine)
@@ -354,11 +371,18 @@ def _parse_place_item(p: Dict[str, Any], location: Dict[str, float], hint_cuisin
     }
 
 
-def search_places_by_text(query: str, location: Dict[str, float], radius_meters: int = 15000) -> List[Dict[str, Any]]:
+def search_places_by_text(
+    query: str,
+    location: Dict[str, float],
+    radius_meters: int = 15000,
+    price_levels: Optional[List[str]] = None,
+    default_price: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     """
     Searches for restaurants matching a specific cuisine or craving using Google Places API (New) Text Search
     (POST https://places.googleapis.com/v1/places:searchText).
     Guarantees discovery of genuine matching restaurants even if nearby pool is saturated with generic chains.
+    Supports strict price level filtering via Google Places API 'priceLevels' parameter.
     """
     api_key = (
         os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
@@ -374,7 +398,7 @@ def search_places_by_text(query: str, location: Dict[str, float], radius_meters:
         "X-Goog-Api-Key": api_key,
         "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
     }
-    body = {
+    body: Dict[str, Any] = {
         "textQuery": f"{query} restaurant",
         "locationBias": {
             "circle": {
@@ -387,6 +411,9 @@ def search_places_by_text(query: str, location: Dict[str, float], radius_meters:
         },
         "maxResultCount": 20,
     }
+    if price_levels:
+        body["priceLevels"] = price_levels
+
     req_data = json.dumps(body).encode("utf-8")
     req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
 
@@ -396,7 +423,7 @@ def search_places_by_text(query: str, location: Dict[str, float], radius_meters:
             places = payload.get("places", [])
             results: List[Dict[str, Any]] = []
             for p in places:
-                item = _parse_place_item(p, location, hint_cuisine=query)
+                item = _parse_place_item(p, location, hint_cuisine=query, default_price=default_price)
                 if item:
                     results.append(item)
             return results
@@ -568,15 +595,25 @@ def score_restaurants(
     include_debug: bool = True,
     is_wildcard: bool = False,
     group_allergies: Optional[List[str]] = None,
+    allowed_prices: Optional[Any] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scores restaurants using the Vector Dot Product with Semantic Overlap.
     STRICT ALGORITHM ANTI-HALLUCINATION:
-    Any restaurant with a 0% consensus score (0 matching traits with group cravings)
-    is strictly filtered out so unpicked cuisines are NEVER recommended.
+    1. Any restaurant with a 0% consensus score (0 matching traits with group cravings)
+       is strictly filtered out so unpicked cuisines are NEVER recommended.
+    2. STRICT PRICE FILTER: Restaurants MUST match one of the group's selected price tiers
+       (e.g., if users selected $$$$, ONLY $$$$ places are scored/recommended).
     """
-    price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
-    max_level = price_levels.get(group_max_price, 4)
+    if allowed_prices:
+        if isinstance(allowed_prices, (set, list, tuple)):
+            allowed_set = {str(p).strip() for p in allowed_prices if str(p).strip() in PRICE_MAP}
+        else:
+            allowed_set = {str(allowed_prices).strip()} if str(allowed_prices).strip() in PRICE_MAP else {"$", "$$", "$$$", "$$$$"}
+    elif group_max_price and group_max_price in PRICE_MAP:
+        allowed_set = {group_max_price}
+    else:
+        allowed_set = {"$", "$$", "$$$", "$$$$"}
 
     if group_location is None:
         group_location = {"lat": 28.5383, "lng": -81.3792}
@@ -584,12 +621,14 @@ def score_restaurants(
     positive_traits = {k: v for k, v in consensus_vector.items() if v > 0}
     negative_traits = {k: v for k, v in consensus_vector.items() if v < 0}
 
+    price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
     scored_restaurants: List[Dict[str, Any]] = []
 
     for rest in restaurants:
-        rest_price_level = price_levels.get(rest.get("price", "$"), 1)
-        if rest_price_level > max_level:
+        rest_price = rest.get("price", "$$")
+        if rest_price not in allowed_set:
             continue
+        rest_price_level = price_levels.get(rest_price, 2)
 
         cuisines = [str(c).strip().lower() for c in rest.get("cuisines", [])]
 
@@ -696,15 +735,35 @@ def recommend_restaurants(
 ) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
     Executes live Google Places API (New) restaurant discovery at the geographic midpoint,
-    applies group constraints (price, vetoes, allergies), scores candidates using
+    applies group constraints (strict price match, vetoes, allergies), scores candidates using
     the anti-hallucination consensus algorithm, and resolves CDN image URLs.
     Returns (results, consensus_data).
     """
-    price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
-    max_price = min(
-        (price_levels.get(request.get("max_price", "$$$$"), 4) for request in mood_requests),
-        default=4,
-    )
+    # STRICT PRICE FILTERING:
+    # Collect all strictly requested price tiers across all group members.
+    # If everyone put four dollars ($$$$), only $$$$ restaurants will show up as recommendations.
+    allowed_prices: set[str] = set()
+    for request in mood_requests:
+        req_prices = request.get("prices")
+        if isinstance(req_prices, list) and req_prices:
+            for p in req_prices:
+                p_clean = str(p).strip()
+                if p_clean in PRICE_MAP:
+                    allowed_prices.add(p_clean)
+        elif request.get("max_price"):
+            p_clean = str(request["max_price"]).strip()
+            if p_clean in PRICE_MAP:
+                allowed_prices.add(p_clean)
+
+    if not allowed_prices:
+        allowed_prices = {"$$"}  # Default fallback if unspecified
+
+    # Map to Google Places API (New) priceLevel filter enums
+    target_google_prices = [
+        gp
+        for tier in allowed_prices
+        for gp in TIER_TO_GOOGLE_PRICE.get(tier, [])
+    ]
 
     # Calculate geographic midpoint of connected members
     member_locations = [req.get("location") for req in mood_requests if req.get("location")]
@@ -728,22 +787,51 @@ def recommend_restaurants(
 
     # Fetch live Google Places API (New) restaurants (Nearby Search)
     raw_restaurants = fetch_live_restaurants(location=midpoint)
+    existing_ids = {r["id"] for r in raw_restaurants}
 
-    # If the group has specific cravings, check if raw_restaurants contains enough matching places.
-    # If not, perform targeted search_places_by_text for the requested cuisines!
+    # If the group has specific cravings, check if raw_restaurants contains enough matching places
+    # that ALSO match allowed_prices!
+    # If not, perform targeted search_places_by_text for the requested cuisines filtered by priceLevels!
     if not is_wildcard and positive_desired:
         for craving in positive_desired[:3]:
             match_count = sum(
                 1 for r in raw_restaurants
-                if any(traits_overlap(c, craving) for c in r.get("cuisines", []))
+                if r.get("price") in allowed_prices
+                and any(traits_overlap(c, craving) for c in r.get("cuisines", []))
             )
             if match_count < 3:
-                targeted_places = search_places_by_text(craving, midpoint)
-                existing_ids = {r["id"] for r in raw_restaurants}
+                targeted_places = search_places_by_text(
+                    craving,
+                    midpoint,
+                    price_levels=target_google_prices if target_google_prices else None,
+                    default_price=next(iter(allowed_prices)) if len(allowed_prices) == 1 else None,
+                )
                 for tp in targeted_places:
                     if tp["id"] not in existing_ids:
                         raw_restaurants.append(tp)
                         existing_ids.add(tp["id"])
+    else:
+        # Wildcard / open craving mode: check if enough restaurants match allowed_prices
+        price_match_count = sum(1 for r in raw_restaurants if r.get("price") in allowed_prices)
+        if price_match_count < 3:
+            price_query = "restaurant"
+            if allowed_prices == {"$$$$"}:
+                price_query = "fine dining restaurant"
+            elif allowed_prices == {"$$$"}:
+                price_query = "upscale restaurant"
+            elif allowed_prices == {"$"}:
+                price_query = "casual dining restaurant"
+
+            targeted_places = search_places_by_text(
+                price_query,
+                midpoint,
+                price_levels=target_google_prices if target_google_prices else None,
+                default_price=next(iter(allowed_prices)) if len(allowed_prices) == 1 else None,
+            )
+            for tp in targeted_places:
+                if tp["id"] not in existing_ids:
+                    raw_restaurants.append(tp)
+                    existing_ids.add(tp["id"])
 
     vetoes = {
         str(cuisine).strip().lower()
@@ -759,13 +847,12 @@ def recommend_restaurants(
         if str(a).strip()
     }
 
-    # Filter out closed restaurants, price violations, and explicit group vetoes
-    # NOTE: Allergies are handled via soft scoring penalties in score_restaurants rather than
-    # hard-vetoing restaurants from the eligible pool.
+    # Filter out closed restaurants, price violations, and explicit group vetoes.
+    # STRICT PRICE FILTER: Candidate restaurant price must be in allowed_prices!
     eligible = [
         r for r in raw_restaurants
         if r.get("is_open", True)
-        and price_levels.get(r.get("price"), 1) <= max_price
+        and r.get("price") in allowed_prices
         and not any(
             any(traits_overlap(c, v) for c in r.get("cuisines", []))
             for v in vetoes
@@ -775,7 +862,8 @@ def recommend_restaurants(
     results = score_restaurants(
         consensus_vector=vector,
         restaurants=eligible,
-        group_max_price="$" * max_price,
+        allowed_prices=allowed_prices,
+        group_max_price=max(allowed_prices, key=lambda x: len(x)),
         group_location=midpoint,
         include_debug=True,
         is_wildcard=is_wildcard,
@@ -823,6 +911,7 @@ def recommend_restaurants(
             "vetoed": req.get("vetoed_cuisines", []),
             "allergies": req.get("allergies", []),
             "max_price": req.get("max_price", "$$"),
+            "prices": req.get("prices") or [req.get("max_price", "$$")],
         }
         for idx, req in enumerate(mood_requests, 1)
     ]
@@ -833,7 +922,8 @@ def recommend_restaurants(
         "vetoes_and_allergies": vetoes_and_allergies,
         "incoming_summary": incoming_summary,
         "midpoint": midpoint,
-        "max_price": "$" * max_price,
+        "allowed_prices": sorted(list(allowed_prices)),
+        "max_price": ", ".join(sorted(list(allowed_prices))),
         "is_wildcard": is_wildcard,
         "candidates_math": [
             {

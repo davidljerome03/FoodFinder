@@ -55,6 +55,7 @@ class UserPreference(BaseModel):
     vetoed_cuisines: list[str] = Field(default_factory=list, max_length=20)
     allergies: list[str] = Field(default_factory=list, max_length=20)
     max_price: str = "$$"
+    prices: Optional[list[str]] = None
     location: Optional[Location] = None
 
     @field_validator("desired_cuisines", "vetoed_cuisines", "allergies")
@@ -75,6 +76,20 @@ class UserPreference(BaseModel):
         if value not in PRICE_VALUES:
             raise ValueError("max_price must be $, $$, $$$, or $$$$.")
         return value
+
+    @field_validator("prices")
+    @classmethod
+    def validate_prices(cls, values: Optional[list[str]]) -> Optional[list[str]]:
+        if values is None:
+            return None
+        cleaned: list[str] = []
+        for p in values:
+            p_clean = str(p).strip()
+            if p_clean in PRICE_VALUES and p_clean not in cleaned:
+                cleaned.append(p_clean)
+        if not cleaned:
+            raise ValueError("prices list must contain at least one valid price tier ($, $$, $$$, or $$$$).")
+        return cleaned
 
 
 class GroupRequest(BaseModel):

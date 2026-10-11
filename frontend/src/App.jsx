@@ -375,7 +375,7 @@ function WeightsInspector({ consensusData, members }) {
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="font-bold text-navy-900 text-sm truncate">{member.name}</span>
                           <span className="text-[10px] font-mono font-bold bg-navy-900/10 px-1.5 py-0.5 rounded">
-                            Max: {prefs?.max_price || '$$'}
+                            Budget: {prefs?.prices ? prefs.prices.join(', ') : (prefs?.max_price || '$$')}
                           </span>
                         </div>
                         <div className="space-y-1">
@@ -675,7 +675,23 @@ function EntryScreen({ onJoin }) {
 // SCREEN 2: LOBBY SCREEN (Preferences Phase - Allergies & Unlock)
 // -------------------------------------------------------------
 function PreferencesScreen({ lobby, session, connection, send, onLeave, error, clearError }) {
-  const [selectedPrice, setSelectedPrice] = useState('$$')
+  const [selectedPrices, setSelectedPrices] = useState(['$$'])
+  const [hasCustomizedPrice, setHasCustomizedPrice] = useState(false)
+
+  const handlePriceClick = (price) => {
+    if (!hasCustomizedPrice) {
+      setHasCustomizedPrice(true)
+      setSelectedPrices([price])
+      return
+    }
+    if (selectedPrices.includes(price)) {
+      if (selectedPrices.length > 1) {
+        setSelectedPrices(selectedPrices.filter((p) => p !== price))
+      }
+    } else {
+      setSelectedPrices([...selectedPrices, price])
+    }
+  }
   const [selectedCuisines, setSelectedCuisines] = useState([])
   const [selectedAllergies, setSelectedAllergies] = useState([])
   const [customCuisineInput, setCustomCuisineInput] = useState('')
@@ -796,7 +812,8 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       desired_cuisines: selectedCuisines,
       vetoed_cuisines: [],
       allergies: selectedAllergies,
-      max_price: selectedPrice,
+      max_price: selectedPrices[selectedPrices.length - 1] || '$$',
+      prices: selectedPrices,
       location: userLocation,
     })
   }
@@ -909,21 +926,28 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
             <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
               <div className="flex justify-between text-xs font-mono font-bold tracking-widest uppercase mb-2 text-navy-900/60">
                 <span>Budget</span>
-                <span>{selectedPrice === '$' ? '< $15' : selectedPrice === '$$' ? '$15-30' : selectedPrice === '$$$' ? '$30-50' : '> $50'}</span>
+                <span>
+                  {selectedPrices.length === 1
+                    ? (selectedPrices[0] === '$' ? '< $15' : selectedPrices[0] === '$$' ? '$15-30' : selectedPrices[0] === '$$$' ? '$30-50' : '> $50')
+                    : selectedPrices.join(', ')}
+                </span>
               </div>
               <div className="flex border-2 border-navy-900 rounded-xl overflow-hidden bg-white h-12 sm:h-14">
-                {prices.map((price) => (
-                  <button
-                    type="button"
-                    key={price}
-                    onClick={() => setSelectedPrice(price)}
-                    className={`flex-1 font-bold text-lg sm:text-xl border-r-2 border-navy-900 last:border-r-0 transition-colors
-                      ${selectedPrice === price ? 'bg-orange-500 text-navy-900' : 'hover:bg-navy-900/5'}
-                    `}
-                  >
-                    {price}
-                  </button>
-                ))}
+                {prices.map((price) => {
+                  const isSelected = selectedPrices.includes(price)
+                  return (
+                    <button
+                      type="button"
+                      key={price}
+                      onClick={() => handlePriceClick(price)}
+                      className={`flex-1 font-bold text-lg sm:text-xl border-r-2 border-navy-900 last:border-r-0 transition-colors
+                        ${isSelected ? 'bg-orange-500 text-navy-900' : 'hover:bg-navy-900/5'}
+                      `}
+                    >
+                      {price}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 
