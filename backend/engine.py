@@ -391,8 +391,10 @@ def score_restaurants(
         rest_data = item["restaurant"].copy()
         if include_debug:
             rest_data["_debug_stats"] = {
-                "final_score": round(item["final_score"], 2),
+                "match_score": round(item["final_score"] + (item["distance"] * 0.25), 2),
+                "distance_penalty": round(item["distance"] * 0.25, 2),
                 "distance_miles": round(item["distance"], 2),
+                "final_score": round(item["final_score"], 2),
             }
         top_3.append(rest_data)
 
@@ -448,7 +450,7 @@ def recommend_restaurants(
         restaurants=eligible,
         group_max_price="$" * max_price,
         group_location=midpoint,
-        include_debug=False,
+        include_debug=True,
         is_wildcard=is_wildcard,
     )
 
@@ -456,6 +458,14 @@ def recommend_restaurants(
     # fallback to top eligible open restaurants without hallucinated ties
     if not results and eligible:
         results = eligible[:3]
+
+    print("\n" + "=" * 50)
+    print(f"[ALGORITHM] Group Consensus Vector: {vector}")
+    print(f"[ALGORITHM] Midpoint Coordinates: {midpoint}")
+    for idx, r in enumerate(results, 1):
+        stats = r.get("_debug_stats", {})
+        print(f"  Candidate #{idx} {r['name']}: Score={stats.get('final_score')} (Match: +{stats.get('match_score')}, Dist: -{stats.get('distance_penalty')} pts / {stats.get('distance_miles')} mi)")
+    print("=" * 50 + "\n")
 
     return results
 

@@ -600,6 +600,14 @@ function VotingScreen({ lobby, session, connection, send }) {
                     <span className="line-clamp-2">{restaurant.address}</span>
                   </div>
                 )}
+
+                {/* Algorithm Score & Weights */}
+                {restaurant._debug_stats && (
+                  <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex items-center justify-between border border-navy-900/10">
+                    <span className="text-orange-600">Score: {restaurant._debug_stats.final_score}</span>
+                    <span>+{restaurant._debug_stats.match_score} match / -{restaurant._debug_stats.distance_penalty} dist</span>
+                  </div>
+                )}
               </div>
             </button>
           )
@@ -678,6 +686,12 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                     <MapPin size={16} className="text-orange-500 shrink-0" />
                     <span>{winner.address}</span>
                   </p>
+                )}
+                {winner?._debug_stats && (
+                  <div className="mt-3 inline-flex items-center gap-2 text-xs font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg border border-navy-900/10 text-navy-900/80">
+                    <span className="text-orange-600">Score: {winner._debug_stats.final_score}</span>
+                    <span>(+{winner._debug_stats.match_score} match / -{winner._debug_stats.distance_penalty} dist)</span>
+                  </div>
                 )}
               </div>
               <div className="text-xl sm:text-2xl font-bold font-mono tracking-widest bg-white border-2 border-navy-900 px-3 py-1 rounded-xl">
