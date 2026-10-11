@@ -359,6 +359,7 @@ BRAND_CUISINE_MAP: Dict[str, str] = {
     "buffalo wild wings": "Chicken",
     "bojangles": "Chicken",
     "boston market": "Chicken",
+    "jollibee": "Chicken",
 
     # Sandwiches & Subs
     "subway": "Sandwiches",
@@ -396,9 +397,39 @@ FAST_FOOD_CHAINS = {
     "hardee", "carls jr", "carl's jr", "checkers", "rally's", "krystal", "sonic",
     "taco bell", "del taco", "chipotle", "qdoba", "moe's southwest", "el pollo loco",
     "chick-fil-a", "popeye", "kfc", "kentucky fried chicken", "raising cane", "zaxby",
-    "church's chicken", "wingstop", "bojangles",
+    "church's chicken", "wingstop", "bojangles", "jollibee",
     "subway", "jimmy john", "jersey mike", "firehouse sub", "arby", "charleys philly",
     "panda express", "dairy queen", "little caesar", "domino", "pizza hut", "papa john",
+}
+
+# Explicit Exclusion Filters: Gas Stations & Convenience Stores
+# Food Finder is strictly for dining restaurants; gas stations and convenience stores are never recommended.
+NON_RESTAURANT_TYPES = {
+    "gas_station",
+    "convenience_store",
+    "car_wash",
+    "car_repair",
+    "auto_repair",
+    "parking",
+    "electric_vehicle_charging_station",
+    "supermarket",
+    "grocery_store",
+    "department_store",
+    "liquor_store",
+    "pharmacy",
+    "drugstore",
+    "atm",
+    "bank",
+}
+
+GAS_STATION_BRANDS = {
+    "shell", "chevron", "exxon", "mobil", "bp", "texaco", "citgo", "marathon",
+    "valero", "speedway", "circle k", "7-eleven", "7 eleven", "7eleven", "racetrac",
+    "sunoco", "wawa", "casey's", "caseys", "quiktrip", "kum & go", "kum and go",
+    "cumberland farms", "sheetz", "love's travel", "pilot travel", "flying j",
+    "buc-ee", "bucees", "royal farms", "quickchek", "murphy usa", "murphy express",
+    "phillips 66", "conoco", "sinclair", "kroger fuel", "gas station", "fuel station",
+    "car wash", "auto spa", "kwik trip", "kwik star", "maverik", "getgo",
 }
 
 
@@ -456,8 +487,10 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
     name_words = set(re.findall(r"\b[a-z0-9]+\b", name_lower))
 
     # 1. Brand-specific authentic cuisine mapping
+    brand_matched_cuisine = None
     for brand, brand_cuisine in BRAND_CUISINE_MAP.items():
         if brand in name_lower:
+            brand_matched_cuisine = brand_cuisine
             if brand_cuisine not in cuisines:
                 cuisines.append(brand_cuisine)
             break
@@ -467,8 +500,17 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
         t_clean = str(t).strip().lower()
         if t_clean not in IGNORED_PLACE_TYPES:
             formatted = format_cuisine_type(t_clean)
-            if formatted and formatted not in cuisines:
-                cuisines.append(formatted)
+            if formatted:
+                # If a brand has an established specialty (e.g. Chicken for Jollibee/KFC),
+                # prevent misleading Google secondary types (like 'hamburger_restaurant') from misclassifying it.
+                if brand_matched_cuisine and brand_matched_cuisine != "Burgers" and formatted == "Burgers":
+                    continue
+                if brand_matched_cuisine and brand_matched_cuisine != "Pizza" and formatted == "Pizza":
+                    continue
+                if brand_matched_cuisine and brand_matched_cuisine != "Mexican" and formatted == "Mexican":
+                    continue
+                if formatted not in cuisines:
+                    cuisines.append(formatted)
 
     # 3. Extract from name words matching CUISINE_SYNONYMS
     for cat, syns in CUISINE_SYNONYMS.items():
@@ -487,14 +529,24 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
                     break
         if matched_name:
             formatted_cat = format_cuisine_type(cat)
+            if brand_matched_cuisine and brand_matched_cuisine != "Burgers" and formatted_cat == "Burgers":
+                continue
             if formatted_cat and formatted_cat not in cuisines:
                 cuisines.append(formatted_cat)
 
     # 4. Hint cuisine from targeted query
     if hint_cuisine:
         formatted_hint = format_cuisine_type(hint_cuisine)
-        if formatted_hint and formatted_hint not in cuisines:
-            cuisines.append(formatted_hint)
+        # Only adopt hint cuisine if it doesn't conflict with a known distinct brand specialty
+        if formatted_hint and not (brand_matched_cuisine and brand_matched_cuisine != formatted_hint and brand_matched_cuisine not in {"Fast Food", "Restaurant"}):
+            hint_norm = normalize_tag(hint_cuisine)
+            has_relevance = (
+                any(traits_overlap(c, hint_cuisine) for c in cuisines)
+                or any(traits_overlap(t, hint_cuisine) for t in types)
+                or any(w in name_words for w in [hint_norm, hint_norm.rstrip("s")])
+            )
+            if has_relevance and formatted_hint not in cuisines:
+                cuisines.append(formatted_hint)
 
     # Fallback if empty
     if not cuisines:
@@ -533,15 +585,36 @@ def _parse_place_item(
 
     display_name_obj = p.get("displayName") or {}
     name = str(display_name_obj.get("text") or "Unknown Restaurant")
+    name_clean = name.lower().strip()
+    name_words = set(re.findall(r"\b[a-z0-9]+\b", name_clean))
 
     raw_types = p.get("types") or []
-    name_clean = name.lower()
+    raw_types_lower = {str(t).lower().strip() for t in raw_types}
+
+    # 1. STRICT EXCLUSION: Never allow gas stations, convenience stores, or non-restaurant businesses
+    if any(nrt in raw_types_lower for nrt in NON_RESTAURANT_TYPES):
+        return None
+
+    for g_brand in GAS_STATION_BRANDS:
+        if " " in g_brand:
+            if g_brand in name_clean:
+                return None
+        else:
+            if g_brand in name_words:
+                return None
+
+    if any(w in name_words for w in {"gas", "fuel", "petroleum", "oil"}):
+        return None
+
     is_fast_food = any("fast_food" in str(t).lower() for t in raw_types) or any(
         chain in name_clean for chain in FAST_FOOD_CHAINS
     )
 
     raw_price = p.get("priceLevel")
-    if raw_price:
+    # Major fast food chains are universally budget ($) tier regardless of Google's inflation-skewed data
+    if any(chain in name_clean for chain in FAST_FOOD_CHAINS):
+        price = "$"
+    elif raw_price:
         price = PRICE_MAP.get(str(raw_price), default_price or ("$" if is_fast_food else "$$"))
     elif default_price:
         price = default_price
@@ -619,7 +692,12 @@ def search_places_by_text(
     }
     clean_q = query.strip()
     q_lower = clean_q.lower()
-    text_query = clean_q if any(term in q_lower for term in ["restaurant", "food", "place", "bar", "grill", "cafe", "drive"]) else f"{clean_q} restaurant"
+    if q_lower in {"burgers", "burger", "pizza", "sushi", "fast food", "fast_food", "tacos", "mexican"}:
+        text_query = clean_q
+    elif any(term in q_lower for term in ["restaurant", "food", "place", "bar", "grill", "cafe", "drive", "burger", "pizza", "taco"]):
+        text_query = clean_q
+    else:
+        text_query = f"{clean_q} restaurant"
     body: Dict[str, Any] = {
         "textQuery": text_query,
         "locationBias": {
@@ -1027,16 +1105,55 @@ def recommend_restaurants(
             if match_count < 3:
                 craving_is_fast_food = "fast" in craving.lower() or "quick" in craving.lower()
                 c_default_price = "$" if craving_is_fast_food else (next(iter(allowed_prices)) if len(allowed_prices) == 1 else None)
+                # In Google Places API, budget ($) and moderate ($$) restaurants/chains rarely have priceLevel
+                # populated in Google's database. Sending priceLevels to Google causes Google's server to omit them.
+                # We only send priceLevels to Google for high-end ($$$, $$$$) dining queries, and enforce
+                # allowed_prices strictly in Python.
+                api_price_levels = target_google_prices if allowed_prices.issubset({"$$$", "$$$$"}) else None
                 targeted_places = search_places_by_text(
                     craving,
                     midpoint,
-                    price_levels=target_google_prices if (target_google_prices and not craving_is_fast_food) else None,
+                    price_levels=api_price_levels,
                     default_price=c_default_price,
                 )
                 for tp in targeted_places:
                     if tp["id"] not in existing_ids:
                         raw_restaurants.append(tp)
                         existing_ids.add(tp["id"])
+
+                # If user selected $ and craving is burgers, guarantee discovery of budget burger joints (McDonald's, Wendy's, etc.)
+                if "$" in allowed_prices and craving.lower() in {"burgers", "burger"}:
+                    cheap_burger_count = sum(
+                        1 for r in raw_restaurants
+                        if r.get("price") == "$" and any(traits_overlap(c, "burgers") for c in r.get("cuisines", []))
+                    )
+                    if cheap_burger_count < 3:
+                        cheap_burger_places = search_places_by_text(
+                            "burger fast food",
+                            midpoint,
+                            default_price="$",
+                        )
+                        for tp in cheap_burger_places:
+                            if tp["id"] not in existing_ids:
+                                raw_restaurants.append(tp)
+                                existing_ids.add(tp["id"])
+
+                # If user craves fast food, ensure genuine fast food restaurants are discovered
+                if craving_is_fast_food:
+                    ff_count = sum(
+                        1 for r in raw_restaurants
+                        if any(traits_overlap(c, "fast_food") for c in r.get("cuisines", []))
+                    )
+                    if ff_count < 3:
+                        ff_places = search_places_by_text(
+                            "fast food restaurant",
+                            midpoint,
+                            default_price="$" if "$" in allowed_prices else None,
+                        )
+                        for tp in ff_places:
+                            if tp["id"] not in existing_ids:
+                                raw_restaurants.append(tp)
+                                existing_ids.add(tp["id"])
     else:
         # Wildcard / open craving mode: check if enough restaurants match allowed_prices
         price_match_count = sum(1 for r in raw_restaurants if r.get("price") in allowed_prices)
@@ -1049,10 +1166,11 @@ def recommend_restaurants(
             elif allowed_prices == {"$"}:
                 price_query = "fast food restaurant"
 
+            api_price_levels = target_google_prices if allowed_prices.issubset({"$$$", "$$$$"}) else None
             targeted_places = search_places_by_text(
                 price_query,
                 midpoint,
-                price_levels=target_google_prices if target_google_prices else None,
+                price_levels=api_price_levels,
                 default_price=next(iter(allowed_prices)) if len(allowed_prices) == 1 else None,
             )
             for tp in targeted_places:
