@@ -590,9 +590,11 @@ function EntryScreen({ onJoin }) {
       <div className="w-full max-w-md bg-card rounded-2xl border-2 border-navy-900 p-6 sm:p-8 space-y-6 sm:space-y-8 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
         <div className="text-center">
           <div className="flex justify-center mb-3">
-            <div className="w-12 h-12 bg-navy-900 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
-              FF
-            </div>
+            <img
+              src="/favicon.svg"
+              alt="Food Finder Logo"
+              className="w-12 h-12 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+            />
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold text-navy-900 mb-1">Food Finder</h1>
           <p className="text-xs font-mono text-navy-900/60 uppercase tracking-widest">Group Dining Consensus</p>
@@ -831,9 +833,13 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
       <header className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-navy-900 rounded-lg flex items-center justify-center text-white font-bold">FF</div>
+            <img
+              src="/favicon.svg"
+              alt="Food Finder Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+            />
             <div>
-              <h1 className="text-xl font-bold leading-none">food finder</h1>
+              <h1 className="text-xl font-bold leading-none">Food Finder</h1>
               <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Group Consensus</p>
             </div>
           </div>
@@ -1170,9 +1176,13 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-20">
       <header className="flex justify-between items-center mb-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-navy-900 rounded-lg flex items-center justify-center text-white font-bold">FF</div>
+          <img
+            src="/favicon.svg"
+            alt="Food Finder Logo"
+            className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+          />
           <div>
-            <h1 className="text-xl font-bold leading-none">food finder</h1>
+            <h1 className="text-xl font-bold leading-none">Food Finder</h1>
             <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Voting Live</p>
           </div>
         </div>
@@ -1412,9 +1422,13 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain, send }) {
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-20">
       <header className="flex justify-between items-center mb-6 max-w-7xl mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-navy-900 rounded-lg flex items-center justify-center text-white font-bold">FF</div>
+          <img
+            src="/favicon.svg"
+            alt="Food Finder Logo"
+            className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+          />
           <div>
-            <h1 className="text-xl font-bold leading-none">food finder</h1>
+            <h1 className="text-xl font-bold leading-none">Food Finder</h1>
             <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-1">Consensus Reached</p>
           </div>
         </div>
@@ -1711,9 +1725,11 @@ function LobbyScreen({ session, onLeave, onPlayAgain }) {
       ) : !lobby ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
           <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">
-            <div className="w-10 h-10 bg-navy-900 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
-              FF
-            </div>
+            <img
+              src="/favicon.svg"
+              alt="Food Finder Logo"
+              className="w-12 h-12 rounded-xl object-contain mx-auto shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+            />
             <h1 className="text-2xl sm:text-3xl font-bold">Joining room...</h1>
             <p className="text-navy-900/60 text-sm font-mono">
               {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}

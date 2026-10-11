@@ -23,7 +23,11 @@ export default function Home() {
       <div className="w-full max-w-md bg-card rounded-2xl border-2 border-navy-900 p-8 space-y-8">
         <div className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="w-10 h-10 bg-navy-900 rounded-lg flex items-center justify-center text-white font-bold">FF</div>
+            <img
+              src="/favicon.svg"
+              alt="Food Finder Logo"
+              className="w-12 h-12 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+            />
           </div>
           <h1 className="text-3xl font-bold text-navy-900 mb-2">Food Finder</h1>
           <p className="text-sm font-mono text-black/60 uppercase tracking-wider">Group Dining Consensus</p>

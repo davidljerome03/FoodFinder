@@ -20,9 +20,13 @@ export default function Winner() {
       {/* Header */}
       <header className="flex justify-between items-center mb-8">
         <div className="flex items-center gap-4">
-          <div className="w-10 h-10 bg-navy-900 rounded-lg flex items-center justify-center text-white font-bold">FF</div>
+          <img
+            src="/favicon.svg"
+            alt="Food Finder Logo"
+            className="w-10 h-10 rounded-xl object-contain shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]"
+          />
           <div>
-            <h1 className="text-xl font-bold leading-none">food finder</h1>
+            <h1 className="text-xl font-bold leading-none">Food Finder</h1>
           </div>
         </div>
         <div className="flex items-center gap-4">
