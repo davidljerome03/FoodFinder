@@ -54,6 +54,7 @@ class Lobby:
     votes_expected: set[str] = field(default_factory=set)
     winner: dict[str, Any] | None = None
     end_reason: str | None = None
+    next_lobby_code: str | None = None
     last_empty_at: float | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -102,6 +103,38 @@ class LobbyManager:
             member = self._new_member(name, location=location)
             lobby.members[member.id] = member
             return lobby, member
+
+    async def play_again(self, old_code: str, name: str, location: dict[str, float] | None = None) -> tuple[Lobby, Member]:
+        """
+        Creates or joins a shared new lobby for all crew members who click 'Play Again'.
+        The first player to click creates the new lobby and sets `next_lobby_code` on the old lobby.
+        All subsequent players who click 'Play Again' in the old lobby automatically join that SAME new lobby.
+        """
+        old_lobby = await self.get_lobby(old_code)
+        target_code = None
+        async with old_lobby.lock:
+            target_code = old_lobby.next_lobby_code
+
+        if target_code:
+            try:
+                # If the shared new lobby exists, join it!
+                return await self.join_lobby(target_code, name, location=location)
+            except LobbyError:
+                # If for some reason join failed (e.g. lobby closed/full), fall through to creating fresh
+                pass
+
+        # Create the shared new lobby using old lobby's group location
+        new_lobby, host = await self.create_lobby(name, old_lobby.location)
+        if location and host.location != location:
+            host.location = location
+
+        async with old_lobby.lock:
+            old_lobby.next_lobby_code = new_lobby.code
+            old_state = self._state(old_lobby)
+
+        # Broadcast the new lobby code to remaining members in the old room so their UI updates
+        await self.broadcast(old_lobby, old_state)
+        return new_lobby, host
 
     async def get_lobby(self, code: str) -> Lobby:
         clean = "".join(ch for ch in str(code).strip().upper() if ch.isalnum())
@@ -206,8 +239,43 @@ class LobbyManager:
             lobby.members[member_id].preferences = preferences
             return self._state(lobby)
 
+    async def restart_session(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
+        """Resets the lobby back to preferences phase so the crew can adjust criteria and try again."""
+        async with lobby.lock:
+            if member_id not in lobby.members:
+                raise LobbyError("MEMBER_NOT_FOUND", "Member not found.")
+            lobby.phase = "preferences"
+            lobby.end_reason = None
+            lobby.winner = None
+            lobby.all_candidates = []
+            lobby.candidates = []
+            lobby.candidate_offset = 0
+            lobby.consensus_data = None
+            lobby.votes_expected = set()
+            for m in lobby.members.values():
+                m.vote = None
+                m.preferences = None
+            return self._state(lobby)
+
     async def unlock_preferences(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
         async with lobby.lock:
+            if lobby.phase in {"ended", "results"}:
+                # If session ended or reached results, unlock resets the lobby to preferences for everyone
+                if member_id not in lobby.members:
+                    raise LobbyError("MEMBER_NOT_FOUND", "Member not found.")
+                lobby.phase = "preferences"
+                lobby.end_reason = None
+                lobby.winner = None
+                lobby.all_candidates = []
+                lobby.candidates = []
+                lobby.candidate_offset = 0
+                lobby.consensus_data = None
+                lobby.votes_expected = set()
+                for m in lobby.members.values():
+                    m.vote = None
+                    m.preferences = None
+                return self._state(lobby)
+
             self._member_for_action(lobby, member_id, "preferences")
             lobby.members[member_id].preferences = None
             return self._state(lobby)
@@ -467,6 +535,7 @@ class LobbyManager:
             "vote_totals": self._vote_totals(lobby) if lobby.phase == "results" else {},
             "winner": lobby.winner,
             "end_reason": lobby.end_reason,
+            "next_lobby_code": lobby.next_lobby_code,
         }
 
 
