@@ -274,16 +274,34 @@ def _load_local_restaurants() -> List[Dict[str, Any]]:
         return json.load(f)
 
 
+# Dietary and Allergy Conflict Map
+ALLERGY_CONFLICTS: Dict[str, set[str]] = {
+    "seafood": {"seafood", "fish", "sushi", "shellfish"},
+    "fish": {"seafood", "fish", "sushi"},
+    "shellfish": {"seafood", "shellfish", "crab", "lobster", "shrimp"},
+    "peanuts": {"thai", "vietnamese", "asian"},
+    "peanut": {"thai", "vietnamese", "asian"},
+    "nuts": {"thai", "vietnamese", "asian", "bakery"},
+    "tree nuts": {"thai", "vietnamese", "asian", "bakery"},
+    "gluten": {"pizza", "italian", "pasta", "ramen", "bakery"},
+    "celiac": {"pizza", "italian", "pasta", "ramen", "bakery"},
+    "dairy": {"ice cream", "pizza", "cheese"},
+    "lactose": {"ice cream", "pizza", "cheese"},
+    "vegetarian": {"steak", "bbq", "steakhouse"},
+    "vegan": {"steak", "bbq", "steakhouse", "burgers"},
+}
+
 def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str, float]:
     """
     Calculates a mathematical Consensus Vector. Adds positive magnitude for desired 
-    cuisines and applies a massive penalty (veto) for explicitly rejected cuisines.
+    cuisines and applies a massive penalty (veto) for explicitly rejected cuisines and allergies.
     Supports 'anything' as a wildcard state.
     """
     vector: Dict[str, float] = {}
     for req in mood_requests:
         desired = req.get("desired_cuisines", [])
         vetoed = req.get("vetoed_cuisines", [])
+        allergies = req.get("allergies", [])
 
         # Positive votes
         for cuisine in desired:
@@ -296,6 +314,17 @@ def calculate_consensus_vector(mood_requests: List[Dict[str, Any]]) -> Dict[str,
             c_clean = str(cuisine).strip().lower()
             if c_clean:
                 vector[c_clean] = vector.get(c_clean, 0.0) - 100.0
+
+        # Strict Allergy Vetoes: Extreme negative weights that guarantee exclusion
+        for allergy in allergies:
+            a_clean = str(allergy).strip().lower()
+            if not a_clean:
+                continue
+            vector[a_clean] = vector.get(a_clean, 0.0) - 500.0
+            for key, conflicts in ALLERGY_CONFLICTS.items():
+                if key in a_clean or a_clean in key:
+                    for conf in conflicts:
+                        vector[conf] = vector.get(conf, 0.0) - 500.0
 
     return vector
 
@@ -435,12 +464,34 @@ def recommend_restaurants(
         for cuisine in request.get("vetoed_cuisines", [])
     }
 
-    # Filter out vetoes and closed restaurants
+    # Collect all group allergies and their mapped conflicted tags
+    allergies = {
+        str(a).strip().lower()
+        for request in mood_requests
+        for a in request.get("allergies", [])
+        if str(a).strip()
+    }
+    allergy_conflicted_tags = set(allergies)
+    for allergy in allergies:
+        for key, conflicts in ALLERGY_CONFLICTS.items():
+            if key in allergy or allergy in key:
+                allergy_conflicted_tags.update(conflicts)
+
+    # Filter out vetoes, allergies, and closed restaurants
+    def has_allergy_conflict(rest: Dict[str, Any]) -> bool:
+        rest_tags = {str(c).strip().lower() for c in rest.get("cuisines", [])}
+        for tag in rest_tags:
+            for bad in allergy_conflicted_tags:
+                if bad in tag or tag in bad:
+                    return True
+        return False
+
     eligible = [
         r for r in raw_restaurants
         if r.get("is_open", True)
         and price_levels.get(r.get("price"), 1) <= max_price
         and not vetoes.intersection(str(c).strip().lower() for c in r.get("cuisines", []))
+        and not has_allergy_conflict(r)
     ]
 
     vector = calculate_consensus_vector(mood_requests)

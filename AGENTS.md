@@ -35,3 +35,13 @@ The frontend and backend communicate via this agreed-upon structure. Do not devi
   "address": "123 Main St, Orlando, FL 32801"
 }
 ```
+
+**User Preference Payload Example (with Allergies & Vetoes):**
+```json
+{
+  "desired_cuisines": ["American", "Burgers"],
+  "vetoed_cuisines": ["Seafood"],
+  "allergies": ["Peanuts", "Shellfish"],
+  "max_price": "$$"
+}
+```

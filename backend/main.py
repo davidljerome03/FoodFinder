@@ -42,16 +42,17 @@ class CreateLobbyRequest(NameRequest):
 class UserPreference(BaseModel):
     desired_cuisines: list[str] = Field(default_factory=list, max_length=20)
     vetoed_cuisines: list[str] = Field(default_factory=list, max_length=20)
+    allergies: list[str] = Field(default_factory=list, max_length=20)
     max_price: str = "$$"
 
-    @field_validator("desired_cuisines", "vetoed_cuisines")
+    @field_validator("desired_cuisines", "vetoed_cuisines", "allergies")
     @classmethod
     def validate_cuisines(cls, cuisines: list[str]) -> list[str]:
         cleaned: list[str] = []
         for cuisine in cuisines:
             normalized = cuisine.strip().lower()
             if not normalized or len(normalized) > 40:
-                raise ValueError("Cuisine names must be between 1 and 40 characters.")
+                raise ValueError("Item names must be between 1 and 40 characters.")
             if normalized not in cleaned:
                 cleaned.append(normalized)
         return cleaned
@@ -182,6 +183,8 @@ async def lobby_socket(socket: WebSocket, code: str):
                     continue
                 if event_type == "submit_preferences":
                     state = await manager.submit_preferences(lobby, member_id, UserPreference.model_validate(event_payload).model_dump())
+                elif event_type == "unlock_preferences":
+                    state = await manager.unlock_preferences(lobby, member_id)
                 elif event_type == "start_voting":
                     state = await manager.start_voting(lobby, member_id)
                 elif event_type == "cast_vote":

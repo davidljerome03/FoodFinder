@@ -116,6 +116,34 @@ class LobbyManager:
             if lobby.sockets.get(member_id) is not socket:
                 return False, None
             del lobby.sockets[member_id]
+
+            # Ghost User Fix:
+            # When someone closes their tab in preferences, remove them from the active roster
+            # and immediately update host / broadcast headcount to remaining players.
+            if lobby.phase == "preferences":
+                if member_id in lobby.members:
+                    del lobby.members[member_id]
+                # Reassign host if the host left
+                if lobby.host_id == member_id and lobby.members:
+                    lobby.host_id = next(iter(lobby.members))
+                    lobby.members[lobby.host_id].is_host = True
+
+            elif lobby.phase == "voting":
+                if member_id in lobby.votes_expected:
+                    lobby.votes_expected.discard(member_id)
+                if member_id in lobby.members:
+                    del lobby.members[member_id]
+                # If all remaining expected members have voted, advance to finish
+                if lobby.votes_expected and all(lobby.members[mid].vote for mid in lobby.votes_expected if mid in lobby.members):
+                    self._finish(lobby)
+
+            elif lobby.phase == "results":
+                # Post-Game Room Stability:
+                # Do NOT clear or reset winner, candidates, or results phase!
+                # Keep the completed results intact even if members leave.
+                if member_id in lobby.members:
+                    del lobby.members[member_id]
+
             if not lobby.sockets:
                 lobby.last_empty_at = time.monotonic()
             return True, self._state(lobby)
@@ -124,6 +152,12 @@ class LobbyManager:
         async with lobby.lock:
             self._member_for_action(lobby, member_id, "preferences")
             lobby.members[member_id].preferences = preferences
+            return self._state(lobby)
+
+    async def unlock_preferences(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
+        async with lobby.lock:
+            self._member_for_action(lobby, member_id, "preferences")
+            lobby.members[member_id].preferences = None
             return self._state(lobby)
 
     async def start_voting(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
@@ -149,15 +183,18 @@ class LobbyManager:
                 raise LobbyError("NOT_PARTICIPATING", "You are not participating in this vote.")
             if restaurant_id not in {item["id"] for item in lobby.candidates}:
                 raise LobbyError("INVALID_CANDIDATE", "Choose one of the current restaurant candidates.")
+            # Dynamically replace/update vote
             lobby.members[member_id].vote = restaurant_id
-            if all(lobby.members[mid].vote for mid in lobby.votes_expected):
+            active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
+            if active_expected and all(lobby.members[mid].vote for mid in active_expected):
                 self._finish(lobby)
             return self._state(lobby)
 
     async def finish_voting(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
         async with lobby.lock:
             self._host_only(lobby, member_id, "voting")
-            if not any(lobby.members[mid].vote for mid in lobby.votes_expected):
+            active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
+            if not any(lobby.members[mid].vote for mid in active_expected):
                 raise LobbyError("NO_VOTES", "At least one vote is required before finishing.")
             self._finish(lobby)
             return self._state(lobby)

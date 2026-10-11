@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLobbySocket } from './useLobbySocket'
-import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, X } from 'lucide-react'
+import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, AlertCircle, ShieldAlert, Trophy } from 'lucide-react'
 
 const SESSION_KEY = 'food-finder-lobby-member'
 const prices = ['$', '$$', '$$$', '$$$$']
 const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Burgers', 'Thai', 'Pizza', 'Seafood', 'Anything']
+const defaultAllergies = ['Gluten / Celiac', 'Dairy / Lactose', 'Peanuts / Nuts', 'Shellfish', 'Seafood', 'Vegetarian', 'Vegan']
 const defaultLocation = { lat: 28.5383, lng: -81.3792 }
 const fallbackImage = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000'
 
@@ -16,15 +17,18 @@ function loadSession() {
   }
 }
 
-function getDirectionsUrl(restaurant) {
-  if (!restaurant) return 'https://www.google.com/maps'
+function handleOpenDirections(restaurant) {
+  if (!restaurant) return
+  let query = ''
   if (restaurant.coordinates?.lat && restaurant.coordinates?.lng) {
-    return `https://www.google.com/maps/search/?api=1&query=${restaurant.coordinates.lat},${restaurant.coordinates.lng}`
+    query = `${restaurant.coordinates.lat},${restaurant.coordinates.lng}`
+  } else if (restaurant.name) {
+    query = encodeURIComponent(`${restaurant.name} ${restaurant.address || ''}`.trim())
+  } else {
+    query = encodeURIComponent(restaurant.address || 'restaurants')
   }
-  if (restaurant.address) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.address)}`
-  }
-  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.name || 'restaurants')}`
+  const url = `https://www.google.com/maps/search/?api=1&query=${query}`
+  window.open(url, '_blank', 'noopener,noreferrer')
 }
 
 // -------------------------------------------------------------
@@ -177,25 +181,26 @@ function EntryScreen({ onJoin }) {
 }
 
 // -------------------------------------------------------------
-// SCREEN 2: LOBBY SCREEN (Preferences Phase - Mobile First)
+// SCREEN 2: LOBBY SCREEN (Preferences Phase - Allergies & Unlock)
 // -------------------------------------------------------------
 function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
   const [selectedPrice, setSelectedPrice] = useState('$$')
   const [selectedCuisines, setSelectedCuisines] = useState([])
-  const [customInput, setCustomInput] = useState('')
+  const [selectedAllergies, setSelectedAllergies] = useState([])
+  const [customCuisineInput, setCustomCuisineInput] = useState('')
+  const [customAllergyInput, setCustomAllergyInput] = useState('')
   const [availableCuisines, setAvailableCuisines] = useState(defaultCuisines)
+  const [availableAllergies, setAvailableAllergies] = useState(defaultAllergies)
 
   const me = lobby?.members?.find((m) => m.id === session.memberId)
   const isHost = lobby?.host_id === session.memberId
   const canAct = connection === 'connected'
 
-  // Input Handling & Deselection with normalization
   const toggleCuisine = (cuisine) => {
     const raw = cuisine.trim()
     const norm = raw.toLowerCase()
 
     if (norm === 'anything') {
-      // Toggle wildcard state: if active, deselect; otherwise, select ONLY Anything
       if (selectedCuisines.some((c) => c.toLowerCase() === 'anything')) {
         setSelectedCuisines([])
       } else {
@@ -204,50 +209,77 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
       return
     }
 
-    // Selecting a specific cuisine removes the 'Anything' wildcard
     const withoutAnything = selectedCuisines.filter((c) => c.toLowerCase() !== 'anything')
     const exists = withoutAnything.some((c) => c.toLowerCase() === norm)
 
     if (exists) {
-      // Successfully deselects the cuisine
       setSelectedCuisines(withoutAnything.filter((c) => c.toLowerCase() !== norm))
     } else {
       setSelectedCuisines([...withoutAnything, raw])
     }
   }
 
-  // Custom text input for cuisines that normalizes input
+  const toggleAllergy = (allergy) => {
+    const raw = allergy.trim()
+    const norm = raw.toLowerCase()
+    if (selectedAllergies.some((a) => a.toLowerCase() === norm)) {
+      setSelectedAllergies(selectedAllergies.filter((a) => a.toLowerCase() !== norm))
+    } else {
+      setSelectedAllergies([...selectedAllergies, raw])
+    }
+  }
+
   const handleAddCustomCuisine = (e) => {
     e?.preventDefault?.()
-    const trimmed = customInput.trim()
+    const trimmed = customCuisineInput.trim()
     if (!trimmed) return
-
-    // Normalize: capitalize each word for display
     const normalizedDisplay = trimmed
       .split(' ')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
       .join(' ')
     const normLower = normalizedDisplay.toLowerCase()
 
-    // Add to available list if not present
     if (!availableCuisines.some((c) => c.toLowerCase() === normLower)) {
       setAvailableCuisines([normalizedDisplay, ...availableCuisines])
     }
 
-    // Automatically select it (clearing Anything wildcard)
     const withoutAnything = selectedCuisines.filter((c) => c.toLowerCase() !== 'anything')
     if (!withoutAnything.some((c) => c.toLowerCase() === normLower)) {
       setSelectedCuisines([...withoutAnything, normalizedDisplay])
     }
-    setCustomInput('')
+    setCustomCuisineInput('')
+  }
+
+  const handleAddCustomAllergy = (e) => {
+    e?.preventDefault?.()
+    const trimmed = customAllergyInput.trim()
+    if (!trimmed) return
+    const normalizedDisplay = trimmed
+      .split(' ')
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ')
+    const normLower = normalizedDisplay.toLowerCase()
+
+    if (!availableAllergies.some((a) => a.toLowerCase() === normLower)) {
+      setAvailableAllergies([normalizedDisplay, ...availableAllergies])
+    }
+    if (!selectedAllergies.some((a) => a.toLowerCase() === normLower)) {
+      setSelectedAllergies([...selectedAllergies, normalizedDisplay])
+    }
+    setCustomAllergyInput('')
   }
 
   const handleLockIn = () => {
     send('submit_preferences', {
       desired_cuisines: selectedCuisines,
       vetoed_cuisines: [],
+      allergies: selectedAllergies,
       max_price: selectedPrice,
     })
+  }
+
+  const handleUnlock = () => {
+    send('unlock_preferences', {})
   }
 
   const submittedCount = lobby.members.filter((m) => m.has_submitted).length
@@ -256,7 +288,6 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
 
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-24">
-      {/* Mobile-Responsive Header */}
       <header className="flex flex-col sm:flex-row justify-between items-center gap-3 mb-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between w-full sm:w-auto">
           <div className="flex items-center gap-3">
@@ -303,7 +334,6 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
         </div>
       </header>
 
-      {/* Main Container - Stacks Vertically on Mobile */}
       <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
         <div className="flex-1 border-2 border-navy-900 rounded-3xl p-5 sm:p-8 flex flex-col relative bg-card shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
           <div className="mb-6">
@@ -312,7 +342,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
             </div>
             <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Set your mood.</h1>
             <p className="text-sm sm:text-base text-navy-900/70 mt-1">
-              Choose your budget and cravings before the group votes.
+              Choose your budget, cravings, and any allergies.
             </p>
           </div>
 
@@ -345,7 +375,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
             </div>
 
             {/* Price Selection */}
-            <div className={me?.has_submitted ? 'opacity-50 pointer-events-none' : ''}>
+            <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
               <div className="flex justify-between text-xs font-mono font-bold tracking-widest uppercase mb-2 text-navy-900/60">
                 <span>Budget</span>
                 <span>{selectedPrice === '$' ? '< $15' : selectedPrice === '$$' ? '$15-30' : selectedPrice === '$$$' ? '$30-50' : '> $50'}</span>
@@ -367,32 +397,30 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
             </div>
 
             {/* Cuisines Grid */}
-            <div className={me?.has_submitted ? 'opacity-50 pointer-events-none' : ''}>
+            <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
               <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-2 text-navy-900/60">
                 <span>Cravings</span>
                 <span>{selectedCuisines.length} Selected</span>
               </div>
 
-              {/* Custom Cuisine Input */}
               <form onSubmit={handleAddCustomCuisine} className="flex gap-2 mb-3">
                 <input
                   type="text"
-                  value={customInput}
-                  onChange={(e) => setCustomInput(e.target.value)}
+                  value={customCuisineInput}
+                  onChange={(e) => setCustomCuisineInput(e.target.value)}
                   placeholder="Add custom craving (e.g. Ramen, Halal)"
                   className="flex-1 px-3 py-2 text-sm rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-orange-500 font-medium"
                   maxLength={30}
                 />
                 <button
                   type="submit"
-                  disabled={!customInput.trim()}
+                  disabled={!customCuisineInput.trim()}
                   className="px-4 py-2 bg-orange-500 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-xl flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
                 >
                   <Plus size={16} /> Add
                 </button>
               </form>
 
-              {/* Cuisine Selection Chips */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                 {availableCuisines.map((cuisine) => {
                   const isWildcard = cuisine.toLowerCase() === 'anything'
@@ -408,9 +436,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
                       }}
                       className={`h-12 sm:h-13 rounded-xl border-2 border-navy-900 font-bold text-sm sm:text-base flex items-center justify-center gap-2 px-3 transition-all
                         ${isSelected
-                          ? isWildcard
-                            ? 'bg-green-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] font-extrabold'
-                            : 'bg-green-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]'
+                          ? 'bg-green-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]'
                           : isWildcard
                             ? 'bg-white border-dashed text-orange-600 hover:bg-orange-50'
                             : 'bg-white hover:bg-orange-50/50'
@@ -424,9 +450,60 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
                 })}
               </div>
             </div>
+
+            {/* Allergies & Dietary Restrictions */}
+            <div className={me?.has_submitted ? 'opacity-60 pointer-events-none' : ''}>
+              <div className="flex justify-between items-center text-xs font-mono font-bold tracking-widest uppercase mb-2 text-red-600">
+                <span className="flex items-center gap-1"><ShieldAlert size={14} /> Allergies & Dietary Restrictions</span>
+                <span>{selectedAllergies.length} Vetoed</span>
+              </div>
+
+              <form onSubmit={handleAddCustomAllergy} className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={customAllergyInput}
+                  onChange={(e) => setCustomAllergyInput(e.target.value)}
+                  placeholder="Add custom restriction (e.g. Soy, Pork)"
+                  className="flex-1 px-3 py-2 text-sm rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-red-500 font-medium"
+                  maxLength={30}
+                />
+                <button
+                  type="submit"
+                  disabled={!customAllergyInput.trim()}
+                  className="px-4 py-2 bg-red-400 disabled:opacity-40 text-navy-900 font-bold text-xs uppercase font-mono border-2 border-navy-900 rounded-xl flex items-center gap-1 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+                >
+                  <Plus size={16} /> Add
+                </button>
+              </form>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
+                {availableAllergies.map((allergy) => {
+                  const isSelected = selectedAllergies.some((a) => a.toLowerCase() === allergy.toLowerCase())
+                  return (
+                    <button
+                      type="button"
+                      key={allergy}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        toggleAllergy(allergy)
+                      }}
+                      className={`h-11 rounded-xl border-2 border-navy-900 font-bold text-xs sm:text-sm flex items-center justify-center gap-1.5 px-2 transition-all
+                        ${isSelected
+                          ? 'bg-red-400 text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]'
+                          : 'bg-white hover:bg-red-50'
+                        }
+                      `}
+                    >
+                      {isSelected ? <Check size={16} className="shrink-0" /> : <span className="text-red-500 text-sm leading-none">✕</span>}
+                      <span className="truncate">{allergy}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Action Button */}
+          {/* Action Buttons & Unlock Choices */}
           <div className="mt-8 pt-4 border-t-2 border-navy-900/10">
             {isHost && submittedCount === totalCount ? (
               <button
@@ -452,6 +529,19 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
               >
                 <span>{me?.has_submitted ? 'Locked In! Waiting for crew...' : 'Lock In Choices'}</span>
                 <Check size={24} />
+              </button>
+            )}
+
+            {/* Unlock Choices Button */}
+            {me?.has_submitted && (
+              <button
+                type="button"
+                onClick={handleUnlock}
+                disabled={!canAct}
+                className="w-full mt-3 bg-white border-2 border-navy-900 text-navy-900 rounded-xl py-3 flex items-center justify-center gap-2 font-bold text-sm uppercase font-mono shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] hover:bg-orange-50 transition-all"
+              >
+                <RotateCcw size={16} />
+                <span>Unlock / Edit Choices</span>
               </button>
             )}
           </div>
@@ -493,7 +583,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave }) {
 }
 
 // -------------------------------------------------------------
-// SCREEN 3: GAME / VOTING SCREEN (Mobile-First + Images & Address)
+// SCREEN 3: GAME / VOTING SCREEN (Change Votes & Weights Transparency)
 // -------------------------------------------------------------
 function VotingScreen({ lobby, session, connection, send }) {
   const [votedId, setVotedId] = useState(null)
@@ -501,6 +591,7 @@ function VotingScreen({ lobby, session, connection, send }) {
   const isHost = lobby?.host_id === session.memberId
   const candidates = lobby?.candidates || []
 
+  // Users can click different restaurants to change their vote dynamically before final result
   const handleVote = (id) => {
     setVotedId(id)
     send('cast_vote', { restaurant_id: id })
@@ -535,35 +626,34 @@ function VotingScreen({ lobby, session, connection, send }) {
 
       <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
         <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-1">
-          Final Round
+          Final Round • Top 3 Candidates
         </div>
         <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-2">Cast your vote.</h1>
         <p className="text-sm sm:text-lg text-navy-900/80">
-          Tap the restaurant you want to eat at the most.
+          Tap to vote. You can tap another option at any time to change your vote!
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
-        {candidates.map((restaurant) => {
+        {candidates.map((restaurant, idx) => {
           const isVoted = votedId === restaurant.id
           const imageSrc = restaurant.image_url || restaurant.image || fallbackImage
+          const matchScore = restaurant._debug_stats?.final_score || (3.0 - idx * 0.5)
+          const percentage = Math.min(99, Math.max(70, Math.round(80 + (matchScore * 5))))
 
           return (
             <button
               type="button"
               key={restaurant.id}
               onClick={() => handleVote(restaurant.id)}
-              disabled={!canAct || votedId !== null}
-              className={`text-left flex flex-col bg-card border-2 rounded-2xl sm:rounded-3xl overflow-hidden transition-all duration-300
+              disabled={!canAct}
+              className={`text-left flex flex-col bg-card border-2 rounded-2xl sm:rounded-3xl overflow-hidden transition-all duration-300 relative
                 ${isVoted
-                  ? 'border-orange-500 shadow-[6px_6px_0px_0px_rgba(255,90,54,1)] translate-x-[-2px] translate-y-[-2px]'
-                  : votedId !== null
-                    ? 'border-navy-900 opacity-50 grayscale'
-                    : 'border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[2px] active:translate-y-[2px]'
+                  ? 'border-orange-500 shadow-[6px_6px_0px_0px_rgba(255,90,54,1)] ring-4 ring-orange-400/40 translate-x-[-2px] translate-y-[-2px]'
+                  : 'border-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[2px] active:translate-y-[2px]'
                 }
               `}
             >
-              {/* Restaurant Image Rendering */}
               <div className="h-48 sm:h-56 w-full bg-gray-200 relative overflow-hidden">
                 <img
                   src={imageSrc}
@@ -571,12 +661,18 @@ function VotingScreen({ lobby, session, connection, send }) {
                   className="w-full h-full object-cover"
                   loading="lazy"
                 />
+                
+                {/* Consensus Match Score Badge */}
+                <div className="absolute top-3 left-3 bg-green-400 text-navy-900 border-2 border-navy-900 px-3 py-1 rounded-full font-bold text-xs uppercase font-mono shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] flex items-center gap-1">
+                  <span>★ {percentage}% Match</span>
+                </div>
+
                 <div className="absolute top-3 right-3 bg-card border-2 border-navy-900 px-3 py-1 rounded-full font-bold text-xs shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
                   {restaurant.price || '$$'}
                 </div>
 
                 {isVoted && (
-                  <div className="absolute inset-0 bg-orange-500/30 flex items-center justify-center backdrop-blur-xs">
+                  <div className="absolute inset-0 bg-orange-500/25 flex items-center justify-center backdrop-blur-xs">
                     <div className="bg-orange-500 text-navy-900 font-extrabold px-6 py-2.5 rounded-full border-2 border-navy-900 text-lg shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] rotate-[-6deg]">
                       Your Pick!
                     </div>
@@ -584,16 +680,17 @@ function VotingScreen({ lobby, session, connection, send }) {
                 )}
               </div>
 
-              {/* Restaurant Details with Address */}
               <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between">
                 <div>
-                  <h2 className="text-xl sm:text-2xl font-bold mb-1 leading-tight">{restaurant.name}</h2>
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <h2 className="text-xl sm:text-2xl font-bold leading-tight">{restaurant.name}</h2>
+                    <span className="text-xs font-mono font-bold text-navy-900/60 uppercase">#{idx + 1}</span>
+                  </div>
                   <p className="text-xs sm:text-sm font-bold text-orange-600 mb-2">
                     {restaurant.cuisines?.join(' • ')}
                   </p>
                 </div>
 
-                {/* Human-Readable Address */}
                 {restaurant.address && (
                   <div className="flex items-start gap-1.5 text-xs text-navy-900/70 font-medium pt-2 border-t border-navy-900/10">
                     <MapPin size={14} className="shrink-0 mt-0.5 text-orange-500" />
@@ -601,13 +698,17 @@ function VotingScreen({ lobby, session, connection, send }) {
                   </div>
                 )}
 
-                {/* Algorithm Score & Weights */}
+                {/* Score and Distance Breakdown */}
                 {restaurant._debug_stats && (
                   <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex items-center justify-between border border-navy-900/10">
                     <span className="text-orange-600">Score: {restaurant._debug_stats.final_score}</span>
                     <span>+{restaurant._debug_stats.match_score} match / -{restaurant._debug_stats.distance_penalty} dist</span>
                   </div>
                 )}
+
+                <div className="mt-3 pt-2 text-center text-[11px] font-mono font-bold uppercase tracking-wider text-navy-900/50">
+                  {isVoted ? 'Selected (Tap another to switch)' : 'Tap to select'}
+                </div>
               </div>
             </button>
           )
@@ -618,16 +719,15 @@ function VotingScreen({ lobby, session, connection, send }) {
 }
 
 // -------------------------------------------------------------
-// SCREEN 4: WINNER / RESULTS SCREEN (Action Links & Play Again)
+// SCREEN 4: WINNER / RESULTS SCREEN (Podium + Google Maps Deep Link)
 // -------------------------------------------------------------
 function ResultsScreen({ lobby, session, onLeave, send }) {
   const winner = lobby?.winner
+  const candidates = lobby?.candidates || []
   const totalCount = lobby?.members?.length || 0
   const winnerImage = winner?.image_url || winner?.image || fallbackImage
-  const directionsUrl = getDirectionsUrl(winner)
 
   const handlePlayAgain = () => {
-    // Emits WebSocket event to clear backend lobby data and start a new round
     if (send) {
       send('play_again', {})
     } else {
@@ -650,20 +750,19 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
         </div>
       </header>
 
-      {/* Main Container - Stacks on Mobile */}
       <div className="flex flex-col lg:flex-row gap-6 max-w-7xl mx-auto">
-        <div className="flex-1 space-y-5">
+        <div className="flex-1 space-y-6">
           <div className="bg-green-400 border-2 border-navy-900 rounded-3xl p-6 sm:p-8 text-center relative overflow-hidden shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
             <div className="text-xs font-mono font-bold tracking-widest uppercase mb-2">
               <span className="text-orange-500">★</span> ROOM {lobby.lobby_code} WINNER <span className="text-orange-500">★</span>
             </div>
             <h1 className="text-4xl sm:text-5xl font-bold mb-2 tracking-tight">Dinner, decided.</h1>
             <p className="text-sm sm:text-base font-bold text-navy-900/80">
-              The group has spoken! Here is your winning restaurant:
+              The group consensus has picked the winning spot!
             </p>
           </div>
 
-          {/* Winner Card with Live Image & Address */}
+          {/* Winner Card */}
           <div className="bg-card border-2 border-navy-900 rounded-3xl overflow-hidden flex flex-col shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
             <div className="relative h-60 sm:h-80 bg-gray-200">
               <img
@@ -671,9 +770,8 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                 alt={winner?.name || 'Winner'}
                 className="w-full h-full object-cover"
               />
-              <div className="absolute top-4 left-4 bg-orange-500 text-navy-900 font-bold text-xs font-mono px-3 py-1.5 rounded-full border-2 border-navy-900 flex items-center gap-1.5 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-                <span className="w-2 h-2 rounded-full bg-navy-900"></span>
-                Top Pick
+              <div className="absolute top-4 left-4 bg-orange-500 text-navy-900 font-bold text-xs font-mono px-3.5 py-1.5 rounded-full border-2 border-navy-900 flex items-center gap-1.5 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+                <Trophy size={14} /> The Group Winner
               </div>
             </div>
 
@@ -700,27 +798,25 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
             </div>
           </div>
 
-          {/* Action Buttons with Google Maps Deep Link */}
+          {/* Action Buttons: Let's Eat with Google Maps deep link */}
           <div className="space-y-3">
-            <a
-              href={directionsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={() => handleOpenDirections(winner)}
               className="w-full bg-orange-500 border-2 border-navy-900 rounded-2xl h-16 sm:h-18 flex items-center justify-between px-6 sm:px-8 text-xl sm:text-2xl font-bold shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-transform text-navy-900"
             >
-              <span>Let's Eat (Get Directions)</span>
+              <span>Let's Eat (Open Directions)</span>
               <Navigation size={28} />
-            </a>
+            </button>
 
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-2 text-xs font-mono font-bold tracking-widest uppercase text-navy-900/70">
-              <a
-                href={directionsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => handleOpenDirections(winner)}
                 className="hover:text-navy-900 flex items-center gap-1.5 underline underline-offset-4"
               >
                 Open in Google Maps ↗
-              </a>
+              </button>
               <span className="hidden sm:inline text-navy-900/30">•</span>
               <button
                 type="button"
@@ -731,6 +827,37 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
               </button>
             </div>
           </div>
+
+          {/* Persistent Top 3 Podium Display */}
+          {candidates.length > 1 && (
+            <div className="pt-4">
+              <h3 className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-3">
+                Full Voting Podium (Top 3)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {candidates.filter((c) => c.id !== winner?.id).map((c, idx) => (
+                  <div key={c.id} className="bg-white border-2 border-navy-900 rounded-xl p-3 flex items-center justify-between shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full border border-navy-900 flex items-center justify-center font-bold text-xs bg-navy-900/10 font-mono">
+                        #{idx + 2}
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm">{c.name}</div>
+                        <div className="text-xs text-navy-900/60">{c.cuisines?.join(' • ')}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDirections(c)}
+                      className="text-xs font-mono font-bold text-orange-600 hover:underline p-1"
+                    >
+                      Map ↗
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Sidebar Summary */}
@@ -773,9 +900,11 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
 }
 
 // -------------------------------------------------------------
-// MAIN CONTAINER
+// MAIN CONTAINER (Decoupled Post-Game Room Stability)
 // -------------------------------------------------------------
 function LobbyScreen({ session, onLeave }) {
+  const [persistedResults, setPersistedResults] = useState(null)
+
   const lobbyExpired = useCallback(() => {
     sessionStorage.removeItem(SESSION_KEY)
     onLeave()
@@ -785,6 +914,23 @@ function LobbyScreen({ session, onLeave }) {
     ...session,
     onLobbyExpired: lobbyExpired,
   })
+
+  // Post-Game Room Stability: Cache results state so if players close tabs or disconnect early,
+  // remaining users are never booted or reset!
+  useEffect(() => {
+    if (lobby?.phase === 'results' && lobby?.winner) {
+      setPersistedResults(lobby)
+    } else if (lobby?.phase === 'preferences') {
+      // Clear cached results when starting a brand new round
+      setPersistedResults(null)
+    }
+  }, [lobby])
+
+  const activeResults = (lobby?.phase === 'results' && lobby?.winner) ? lobby : persistedResults
+
+  if (activeResults) {
+    return <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} />
+  }
 
   if (!lobby) {
     return (
@@ -800,10 +946,6 @@ function LobbyScreen({ session, onLeave }) {
 
   if (lobby.phase === 'voting') {
     return <VotingScreen lobby={lobby} session={session} connection={connection} send={send} />
-  }
-
-  if (lobby.phase === 'results') {
-    return <ResultsScreen lobby={lobby} session={session} onLeave={onLeave} send={send} />
   }
 
   return (
