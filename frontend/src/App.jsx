@@ -836,19 +836,9 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
       {/* Header */}
-      <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 max-w-7xl w-full mx-auto">
-        <div className="flex items-center gap-3 w-full sm:w-auto">
-          <div className="w-9 h-9 rounded-xl bg-navy-900 text-white flex items-center justify-center">
-            <UtensilsCrossed size={18} />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold leading-none">food finder</h1>
-            <p className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 mt-0.5">GROUP DINING CONSENSUS</p>
-          </div>
-        </div>
-
+      <header className="flex justify-end items-center gap-3 mb-8 max-w-7xl w-full mx-auto">
         <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end">
-          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
             <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
             <span className="text-xs font-bold font-mono tracking-wider">LIVE / {String(totalCount).padStart(2, '0')}</span>
           </div>
@@ -866,7 +856,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
           <button
             type="button"
             onClick={onLeave}
-            className="text-xs font-mono uppercase text-navy-900/60 hover:text-navy-900 border-2 border-navy-900 px-3 py-1.5 rounded-xl bg-white"
+            className="text-xs font-mono uppercase text-navy-900/60 hover:text-navy-900 border-2 border-navy-900 px-3 py-1.5 rounded-xl bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
           >
             Leave
           </button>
@@ -1218,16 +1208,8 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
       {/* Header */}
       <header className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8 max-w-7xl w-full mx-auto">
-        <div>
-          <div className="text-[10px] font-mono tracking-widest uppercase text-navy-900/60 font-bold mb-1">
-            ROOM {lobby.lobby_code} / ROUND 01
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
-              <UtensilsCrossed size={18} />
-            </div>
-            <h1 className="text-xl font-bold leading-none">food finder</h1>
-          </div>
+        <div className="text-xs font-mono tracking-widest uppercase text-navy-900/60 font-bold">
+          ROOM {lobby.lobby_code} / ROUND 01
         </div>
 
         <div className="flex items-center gap-3">
@@ -1498,21 +1480,15 @@ function ResultsScreen({ lobby, session, onLeave, onPlayAgain }) {
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
       {/* Header */}
-      <header className="flex justify-between items-center mb-8 max-w-7xl w-full mx-auto">
+      <header className="flex justify-end items-center mb-8 max-w-7xl w-full mx-auto">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-navy-900 text-white flex items-center justify-center">
-            <UtensilsCrossed size={18} />
-          </div>
-          <h1 className="text-xl font-bold leading-none">food finder</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
             <div className="w-2 h-2 rounded-full bg-orange-500"></div>
             <span className="text-xs font-bold font-mono tracking-wider uppercase">LIVE / 04</span>
           </div>
-          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white">
+          <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
             <span className="text-xs font-bold font-mono tracking-wider uppercase">
-              ROOM {lobby.lobby_code} {totalCount} PLAYERS
+              ROOM {lobby.lobby_code} · {totalCount} PLAYERS
             </span>
           </div>
         </div>
