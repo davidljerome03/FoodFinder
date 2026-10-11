@@ -185,7 +185,7 @@ class ErrorBoundary extends Component {
 // WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
 // -------------------------------------------------------------
 function WeightsInspector({ consensusData, members }) {
-  const [isOpen, setIsOpen] = useState(true)
+  const [isOpen, setIsOpen] = useState(false)
 
   if (!consensusData && (!members || members.length === 0)) return null
 
@@ -236,9 +236,6 @@ function WeightsInspector({ consensusData, members }) {
               <h3 className="font-bold text-base sm:text-lg text-navy-900 leading-tight">
                 Consensus Algorithm & Weights Inspector
               </h3>
-              <span className="bg-orange-500 text-navy-900 text-[10px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-full border border-navy-900">
-                QA / Testing Mode
-              </span>
             </div>
             <p className="text-xs text-navy-900/70 font-mono mt-0.5">
               Live breakdown of incoming member preferences, consensus vector weights, and candidate scoring math
