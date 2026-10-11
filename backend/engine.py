@@ -991,6 +991,14 @@ def recommend_restaurants(
     member_locations = [req.get("location") for req in mood_requests if req.get("location")]
     midpoint = calculate_geographic_midpoint(member_locations, fallback=group_location)
 
+    # Collect all desired cuisines across group requests
+    all_desired = [
+        str(cuisine).strip().lower()
+        for request in mood_requests
+        for cuisine in request.get("desired_cuisines", [])
+        if str(cuisine).strip()
+    ]
+
     # Determine if the group voted for 'anything' wildcard
     is_wildcard = (len(all_desired) == 0) or all(c == "anything" for c in all_desired)
 
