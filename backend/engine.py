@@ -17,6 +17,76 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_IMAGE = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000"
 
+# Curated High-Resolution Cuisine Themed Images for 100% reliable rendering
+CUISINE_IMAGE_MAP: Dict[str, str] = {
+    "mexican": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&q=80&w=1000",
+    "tacos": "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&q=80&w=1000",
+    "burrito": "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?auto=format&fit=crop&q=80&w=1000",
+    "italian": "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=1000",
+    "pasta": "https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=1000",
+    "pizza": "https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=1000",
+    "sushi": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=1000",
+    "japanese": "https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=1000",
+    "burgers": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+    "burger": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+    "american": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+    "fast food": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+    "thai": "https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000",
+    "vietnamese": "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&q=80&w=1000",
+    "asian": "https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000",
+    "chinese": "https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&q=80&w=1000",
+    "seafood": "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000",
+    "fish": "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000",
+    "steak": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000",
+    "steakhouse": "https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000",
+    "bbq": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000",
+    "barbecue": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000",
+    "ramen": "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=1000",
+    "mediterranean": "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000",
+    "greek": "https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000",
+    "bakery": "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=1000",
+    "dessert": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=1000",
+    "ice cream": "https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&q=80&w=1000",
+    "cafe": "https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1000",
+    "coffee": "https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1000",
+}
+
+
+def get_cuisine_image(cuisines: List[str]) -> str:
+    """Returns a rich food image matching the restaurant's primary cuisine."""
+    for c in cuisines:
+        c_clean = str(c).strip().lower()
+        for key, img_url in CUISINE_IMAGE_MAP.items():
+            if key in c_clean or c_clean in key:
+                return img_url
+    return DEFAULT_IMAGE
+
+
+def resolve_photo_url(photo_resource: str, api_key: str, cuisines: List[str]) -> str:
+    """
+    Resolves the direct public Google CDN photoUri using the backend's API key.
+    If resolution succeeds, returns the public https://lh3.googleusercontent.com/... CDN link.
+    If resolution fails or no photo is available, returns the backend proxy URL or themed cuisine fallback.
+    """
+    cuisine_fallback = get_cuisine_image(cuisines)
+    if not photo_resource or not api_key:
+        return cuisine_fallback
+
+    clean_name = photo_resource.strip("/")
+    url = f"https://places.googleapis.com/v1/{clean_name}/media?skipHttpRedirect=true&maxWidthPx=1000&maxHeightPx=1000&key={api_key}"
+    headers = {"X-Goog-Api-Key": api_key, "Accept": "application/json"}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=4) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            photo_uri = data.get("photoUri")
+            if photo_uri:
+                return photo_uri
+    except Exception as exc:
+        logger.debug("Could not resolve direct CDN photoUri for %s: %s", photo_resource, exc)
+
+    return f"/api/photos?name={urllib.parse.quote(clean_name)}"
+
 # Dietary and Allergy Conflict Map
 ALLERGY_CONFLICTS: Dict[str, set[str]] = {
     "seafood": {"seafood", "fish", "sushi", "shellfish"},
@@ -160,12 +230,18 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
                 address = str(p.get("formattedAddress") or "Address unavailable")
 
                 photos = p.get("photos") or []
-                image_url = DEFAULT_IMAGE
+                photo_resource = ""
                 if isinstance(photos, list) and photos:
                     first_photo = photos[0]
                     if isinstance(first_photo, dict) and first_photo.get("name"):
-                        photo_name = first_photo["name"]
-                        image_url = f"https://places.googleapis.com/v1/{photo_name}/media?key={api_key}&maxHeightPx=1000&maxWidthPx=1000"
+                        photo_resource = str(first_photo["name"]).strip("/")
+
+                # Safe initial image: backend proxy if photo exists, else rich cuisine fallback
+                initial_image = (
+                    f"/api/photos?name={urllib.parse.quote(photo_resource)}"
+                    if photo_resource
+                    else get_cuisine_image(cuisines)
+                )
 
                 live_results.append({
                     "id": place_id,
@@ -173,7 +249,8 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
                     "price": price,
                     "cuisines": cuisines,
                     "coordinates": coords,
-                    "image_url": image_url,
+                    "image_url": initial_image,
+                    "_photo_resource": photo_resource,
                     "address": address,
                     "is_open": True,
                 })
@@ -287,22 +364,23 @@ def score_restaurants(
         # 1. Base Score: Vector Dot Product
         # Dot product = sum(consensus_vector[cuisine] * restaurant_vector[cuisine])
         dot_product_score = 0.0
-        matching_traits = 0
+        matching_traits = []
         for c in cuisines:
             weight = consensus_vector.get(c, 0.0)
             if weight > 0:
                 dot_product_score += weight
-                matching_traits += 1
+                matching_traits.append({"trait": format_cuisine_type(c), "weight": round(weight, 2)})
 
         # ANTI-HALLUCINATION ENFORCEMENT:
         # If no wildcard is active and this restaurant has 0 matching consensus traits (0% score),
         # strictly filter it out!
-        if not is_wildcard and (matching_traits == 0 or dot_product_score <= 0.0):
+        if not is_wildcard and (len(matching_traits) == 0 or dot_product_score <= 0.0):
             continue
 
         # If it's a pure wildcard round, assign baseline score of 1.0
         if is_wildcard and dot_product_score == 0.0:
             dot_product_score = 1.0
+            matching_traits.append({"trait": "Wildcard (Open Choice)", "weight": 1.0})
 
         # 2. Distance Penalty (0.25 points per mile away)
         coords = rest.get("coordinates", {})
@@ -311,6 +389,7 @@ def score_restaurants(
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
         distance_penalty = distance * 0.25
         final_score = dot_product_score - distance_penalty
+        formula = f"+{dot_product_score:.2f} (Match) - {distance_penalty:.2f} ({distance:.1f} mi) = {final_score:.2f} pts"
 
         scored_restaurants.append({
             "restaurant": rest,
@@ -319,6 +398,8 @@ def score_restaurants(
             "price_level": rest_price_level,
             "match_score": dot_product_score,
             "distance_penalty": distance_penalty,
+            "matched_traits": matching_traits,
+            "formula": formula,
         })
 
     # 4. Tie-Breaking Logic
@@ -334,6 +415,8 @@ def score_restaurants(
                 "distance_penalty": round(item["distance_penalty"], 2),
                 "distance_miles": round(item["distance"], 2),
                 "final_score": round(item["final_score"], 2),
+                "matched_traits": item["matched_traits"],
+                "formula": item["formula"],
             }
         top_3.append(rest_data)
 
@@ -342,11 +425,12 @@ def score_restaurants(
 
 def recommend_restaurants(
     mood_requests: List[Dict[str, Any]], group_location: Dict[str, float]
-) -> List[Dict[str, Any]]:
+) -> tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
     Executes live Google Places API (New) restaurant discovery at the geographic midpoint,
-    applies group constraints (price, vetoes, allergies), and scores candidates using
-    the anti-hallucination consensus algorithm.
+    applies group constraints (price, vetoes, allergies), scores candidates using
+    the anti-hallucination consensus algorithm, and resolves CDN image URLs.
+    Returns (results, consensus_data).
     """
     price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
     max_price = min(
@@ -420,12 +504,83 @@ def recommend_restaurants(
     if not results and eligible:
         results = eligible[:3]
 
+    # Resolve direct Google CDN photoUri for the winning voting options using server credentials
+    api_key = (
+        os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+        or os.getenv("PLACES_API_KEY", "").strip()
+    )
+
+    for r in results:
+        photo_res = r.get("_photo_resource", "")
+        if photo_res and api_key:
+            r["image_url"] = resolve_photo_url(photo_res, api_key, r.get("cuisines", []))
+        elif not r.get("image_url") or r["image_url"] == DEFAULT_IMAGE:
+            r["image_url"] = get_cuisine_image(r.get("cuisines", []))
+
+    # Build consensus metadata dictionary for testing and weights transparency
+    positive_weights = [
+        {"trait": format_cuisine_type(k), "weight": round(v, 2)}
+        for k, v in sorted(vector.items(), key=lambda x: x[1], reverse=True)
+        if v > 0
+    ]
+
+    vetoes_and_allergies = [
+        {
+            "trait": format_cuisine_type(k),
+            "weight": round(v, 2),
+            "is_allergy": any(a in k or k in a for a in allergies),
+        }
+        for k, v in sorted(vector.items(), key=lambda x: x[1])
+        if v < 0
+    ]
+
+    incoming_summary = [
+        {
+            "member_name": str(req.get("name") or f"Player {idx}"),
+            "desired": req.get("desired_cuisines", []),
+            "vetoed": req.get("vetoed_cuisines", []),
+            "allergies": req.get("allergies", []),
+            "max_price": req.get("max_price", "$$"),
+        }
+        for idx, req in enumerate(mood_requests, 1)
+    ]
+
+    consensus_data = {
+        "vector": {k: round(v, 2) for k, v in vector.items()},
+        "positive_weights": positive_weights,
+        "vetoes_and_allergies": vetoes_and_allergies,
+        "incoming_summary": incoming_summary,
+        "midpoint": midpoint,
+        "max_price": "$" * max_price,
+        "is_wildcard": is_wildcard,
+        "candidates_math": [
+            {
+                "id": r["id"],
+                "name": r["name"],
+                "price": r.get("price", "$$"),
+                "cuisines": r.get("cuisines", []),
+                "final_score": r.get("_debug_stats", {}).get("final_score", 0),
+                "match_score": r.get("_debug_stats", {}).get("match_score", 0),
+                "distance_miles": r.get("_debug_stats", {}).get("distance_miles", 0),
+                "distance_penalty": r.get("_debug_stats", {}).get("distance_penalty", 0),
+                "matched_traits": r.get("_debug_stats", {}).get("matched_traits", []),
+                "formula": r.get("_debug_stats", {}).get("formula", ""),
+            }
+            for r in results
+        ],
+    }
+
+    # Attach consensus_data directly to each candidate result
+    for r in results:
+        r["_consensus_data"] = consensus_data
+
     print("\n" + "=" * 50)
     print(f"[ALGORITHM] Group Consensus Vector: {vector}")
     print(f"[ALGORITHM] Midpoint Coordinates: {midpoint}")
     for idx, r in enumerate(results, 1):
         stats = r.get("_debug_stats", {})
-        print(f"  Candidate #{idx} {r['name']}: Score={stats.get('final_score')} (Match: +{stats.get('match_score')}, Dist: -{stats.get('distance_penalty')} pts / {stats.get('distance_miles')} mi)")
+        print(f"  Candidate #{idx} {r['name']}: Score={stats.get('final_score')} ({stats.get('formula')})")
     print("=" * 50 + "\n")
 
-    return results
+    return results, consensus_data

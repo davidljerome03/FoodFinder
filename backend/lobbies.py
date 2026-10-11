@@ -47,6 +47,7 @@ class Lobby:
     sockets: dict[str, WebSocket] = field(default_factory=dict)
     phase: str = "preferences"
     candidates: list[dict[str, Any]] = field(default_factory=list)
+    consensus_data: dict[str, Any] | None = None
     votes_expected: set[str] = field(default_factory=set)
     winner: dict[str, Any] | None = None
     last_empty_at: float | None = None
@@ -170,9 +171,17 @@ class LobbyManager:
                 raise LobbyError("MEMBERS_OFFLINE", "All members must be connected before voting starts.")
             if any(item.preferences is None for item in lobby.members.values()):
                 raise LobbyError("PREFERENCES_INCOMPLETE", "All members must submit preferences before voting starts.")
-            preferences = [item.preferences for item in lobby.members.values() if item.preferences]
+            preferences = [
+                {**item.preferences, "name": item.name}
+                for item in lobby.members.values()
+                if item.preferences
+            ]
             try:
-                candidates = self._recommend(preferences, lobby.location)
+                rec_result = self._recommend(preferences, lobby.location)
+                if isinstance(rec_result, tuple):
+                    candidates, consensus_data = rec_result
+                else:
+                    candidates, consensus_data = rec_result, {}
             except LobbyError:
                 raise
             except Exception as exc:
@@ -182,6 +191,7 @@ class LobbyManager:
             if not candidates:
                 raise LobbyError("NO_MATCHES", "No restaurants match the group's preferences. Adjust cravings or price and try again.")
             lobby.candidates = candidates
+            lobby.consensus_data = consensus_data
             lobby.phase = "voting"
             lobby.votes_expected = set(lobby.members)
             return self._state(lobby)
@@ -321,10 +331,12 @@ class LobbyManager:
                     "connected": item.id in lobby.sockets,
                     "has_submitted": item.preferences is not None,
                     "has_voted": bool(item.vote),
+                    "preferences": item.preferences if lobby.phase in {"voting", "results"} else None,
                 }
                 for item in lobby.members.values()
             ],
             "candidates": lobby.candidates,
+            "consensus_data": lobby.consensus_data,
             "votes_submitted": votes_submitted,
             "votes_expected": len(lobby.votes_expected),
             "vote_totals": self._vote_totals(lobby) if lobby.phase == "results" else {},

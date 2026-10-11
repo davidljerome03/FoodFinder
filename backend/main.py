@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import urllib.request
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
 import engine
@@ -81,7 +84,7 @@ class RemoveMemberPayload(BaseModel):
     member_id: Annotated[str, Field(min_length=1, max_length=100)]
 
 
-def recommend(preferences: list[dict[str, Any]], location: dict[str, float]) -> list[dict[str, Any]]:
+def recommend(preferences: list[dict[str, Any]], location: dict[str, float]) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     return engine.recommend_restaurants(preferences, location)
 
 
@@ -117,14 +120,49 @@ def health_check():
     return {"status": "Backend Active"}
 
 
+@app.get("/api/photos")
+def get_photo(name: str):
+    """
+    Proxies Google Places photos so client browsers don't get 403 Forbidden due to IP/CORS restrictions.
+    Redirects to the direct Google CDN photoUri or serves a rich cuisine fallback.
+    """
+    api_key = (
+        os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+        or os.getenv("PLACES_API_KEY", "").strip()
+    )
+    if not api_key or not name:
+        return RedirectResponse(url=engine.DEFAULT_IMAGE, status_code=307)
+
+    clean_name = name.strip("/")
+    url = f"https://places.googleapis.com/v1/{clean_name}/media?skipHttpRedirect=true&maxWidthPx=1000&maxHeightPx=1000&key={api_key}"
+    headers = {"X-Goog-Api-Key": api_key, "Accept": "application/json"}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            photo_uri = payload.get("photoUri")
+            if photo_uri:
+                return RedirectResponse(url=photo_uri, status_code=307)
+    except Exception as exc:
+        logger.warning("Error proxying photo for '%s': %s", name, exc)
+
+    return RedirectResponse(url=engine.DEFAULT_IMAGE, status_code=307)
+
+
 @app.post("/api/recommend")
 def get_recommendations(payload: GroupRequest):
     requests = [request.model_dump() for request in payload.mood_requests]
     try:
-        winners = recommend(requests, payload.group_location.model_dump())
+        rec_result = recommend(requests, payload.group_location.model_dump())
+        if isinstance(rec_result, tuple):
+            winners, consensus_data = rec_result
+        else:
+            winners, consensus_data = rec_result, {}
         return {
             "status": "success",
-            "consensus_vector": engine.calculate_consensus_vector(requests),
+            "consensus_vector": consensus_data.get("vector") or engine.calculate_consensus_vector(requests),
+            "consensus_data": consensus_data,
             "winners": winners,
         }
     except Exception as exc:

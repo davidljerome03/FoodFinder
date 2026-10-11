@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLobbySocket } from './useLobbySocket'
-import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, AlertCircle, ShieldAlert, Trophy } from 'lucide-react'
+import { Check, Copy, CheckCircle2, MapPin, Clock, Navigation, RotateCcw, Plus, AlertCircle, ShieldAlert, Trophy, Sliders, ChevronDown, ChevronUp, Scale, Calculator } from 'lucide-react'
 
 const SESSION_KEY = 'food-finder-lobby-member'
 const prices = ['$', '$$', '$$$', '$$$$']
@@ -8,6 +8,51 @@ const defaultCuisines = ['Mexican', 'Italian', 'Sushi', 'Burgers', 'Thai', 'Pizz
 const defaultAllergies = ['Gluten / Celiac', 'Dairy / Lactose', 'Peanuts / Nuts', 'Shellfish', 'Seafood', 'Vegetarian', 'Vegan']
 const defaultLocation = { lat: 28.5383, lng: -81.3792 }
 const fallbackImage = 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&q=80&w=1000'
+
+const CUISINE_FALLBACK_IMAGES = {
+  mexican: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&q=80&w=1000',
+  tacos: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?auto=format&fit=crop&q=80&w=1000',
+  burrito: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?auto=format&fit=crop&q=80&w=1000',
+  italian: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=1000',
+  pasta: 'https://images.unsplash.com/photo-1551183053-bf91a1d81141?auto=format&fit=crop&q=80&w=1000',
+  pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?auto=format&fit=crop&q=80&w=1000',
+  sushi: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=1000',
+  japanese: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?auto=format&fit=crop&q=80&w=1000',
+  burgers: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000',
+  burger: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000',
+  american: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000',
+  'fast food': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000',
+  thai: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000',
+  vietnamese: 'https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&q=80&w=1000',
+  asian: 'https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000',
+  chinese: 'https://images.unsplash.com/photo-1525755662778-989d0524087e?auto=format&fit=crop&q=80&w=1000',
+  seafood: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000',
+  fish: 'https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?auto=format&fit=crop&q=80&w=1000',
+  steak: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000',
+  steakhouse: 'https://images.unsplash.com/photo-1544025162-d76694265947?auto=format&fit=crop&q=80&w=1000',
+  bbq: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000',
+  barbecue: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?auto=format&fit=crop&q=80&w=1000',
+  ramen: 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?auto=format&fit=crop&q=80&w=1000',
+  mediterranean: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000',
+  greek: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?auto=format&fit=crop&q=80&w=1000',
+  bakery: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=1000',
+  dessert: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&q=80&w=1000',
+  'ice cream': 'https://images.unsplash.com/photo-1501443762994-82bd5dace89a?auto=format&fit=crop&q=80&w=1000',
+  cafe: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&q=80&w=1000',
+  coffee: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?auto=format&fit=crop&q=80&w=1000',
+}
+
+function getCuisineFallback(cuisines) {
+  if (Array.isArray(cuisines)) {
+    for (const c of cuisines) {
+      const lower = String(c).toLowerCase().trim()
+      for (const [key, url] of Object.entries(CUISINE_FALLBACK_IMAGES)) {
+        if (lower.includes(key) || key.includes(lower)) return url
+      }
+    }
+  }
+  return fallbackImage
+}
 
 function loadSession() {
   try {
@@ -63,6 +108,257 @@ function ErrorToast({ message, onClose }) {
           ✕
         </button>
       </div>
+    </div>
+  )
+}
+
+// -------------------------------------------------------------
+// WEIGHTS & ALGORITHM INSPECTOR COMPONENT (Testing / QA Transparency)
+// -------------------------------------------------------------
+function WeightsInspector({ consensusData, members }) {
+  const [isOpen, setIsOpen] = useState(true)
+
+  if (!consensusData && (!members || members.length === 0)) return null
+
+  const positiveWeights = consensusData?.positive_weights || {}
+  const vetoes = consensusData?.vetoes_and_allergies || []
+  const candidatesMath = consensusData?.candidates_math || []
+  const midpoint = consensusData?.midpoint
+
+  const positiveEntries = Object.entries(positiveWeights).sort((a, b) => b[1] - a[1])
+
+  return (
+    <div className="w-full max-w-7xl mx-auto mb-6 bg-amber-50/90 border-2 border-navy-900 rounded-2xl sm:rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] overflow-hidden transition-all text-navy-900">
+      {/* Header bar with toggle */}
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        className="cursor-pointer bg-amber-200/90 hover:bg-amber-300/80 p-4 sm:p-5 flex items-center justify-between border-b-2 border-navy-900 transition-colors select-none"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-navy-900 text-amber-300 flex items-center justify-center font-bold text-sm shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] shrink-0">
+            <Calculator size={20} />
+          </div>
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="font-bold text-base sm:text-lg text-navy-900 leading-tight">
+                Consensus Algorithm & Weights Inspector
+              </h3>
+              <span className="bg-orange-500 text-navy-900 text-[10px] font-mono font-extrabold uppercase px-2 py-0.5 rounded-full border border-navy-900">
+                QA / Testing Mode
+              </span>
+            </div>
+            <p className="text-xs text-navy-900/70 font-mono mt-0.5">
+              Live breakdown of incoming member preferences, consensus vector weights, and candidate scoring math
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setIsOpen(!isOpen)
+          }}
+          className="flex items-center gap-1.5 bg-white border-2 border-navy-900 px-3 py-1.5 rounded-xl font-mono text-xs font-bold text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] shrink-0 hover:bg-orange-50"
+        >
+          {isOpen ? (
+            <>
+              <span>Hide Details</span>
+              <ChevronUp size={16} />
+            </>
+          ) : (
+            <>
+              <span>Inspect Weights</span>
+              <ChevronDown size={16} />
+            </>
+          )}
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="p-4 sm:p-6 space-y-6">
+          {/* Section 1: Positive Weights & Vetoes */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+            {/* Positive Weights Card */}
+            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 flex items-center gap-1.5">
+                  <Scale size={14} className="text-green-600" />
+                  Consensus Vector (Positive Weights)
+                </div>
+                <span className="text-[11px] font-mono text-navy-900/60 font-bold">
+                  {positiveEntries.length} trait{positiveEntries.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              {positiveEntries.length === 0 ? (
+                <p className="text-xs text-navy-900/60 font-mono italic">
+                  {consensusData?.is_wildcard ? 'Wildcard mode: Equal weighting across all cuisines' : 'No positive weights recorded.'}
+                </p>
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                  {positiveEntries.map(([trait, weight]) => {
+                    const maxWeight = Math.max(...Object.values(positiveWeights), 1)
+                    const percent = Math.min(100, Math.round((weight / maxWeight) * 100))
+                    return (
+                      <div key={trait} className="flex items-center gap-2 text-xs">
+                        <span className="w-24 font-bold font-mono capitalize truncate">{trait}</span>
+                        <div className="flex-1 bg-navy-900/10 h-3 rounded-full overflow-hidden border border-navy-900/20">
+                          <div
+                            className="bg-green-400 h-full rounded-full transition-all duration-300"
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <span className="w-14 text-right font-mono font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-300">
+                          +{Number(weight).toFixed(1)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Vetoes & Allergies Card */}
+            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 flex items-center gap-1.5">
+                  <ShieldAlert size={14} className="text-red-600" />
+                  Dietary Restrictions & Strict Vetoes
+                </div>
+                <span className="text-[11px] font-mono text-navy-900/60 font-bold">
+                  {vetoes.length} active
+                </span>
+              </div>
+              {vetoes.length === 0 ? (
+                <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-xs font-bold text-green-800 flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+                  <span>No allergies or strict vetoes active for this round.</span>
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                  {vetoes.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between bg-red-50 border border-red-300 px-2.5 py-1.5 rounded-lg text-xs"
+                    >
+                      <span className="font-bold text-red-900 capitalize">{item}</span>
+                      <span className="font-mono font-bold text-[10px] text-red-700 bg-red-200 px-2 py-0.5 rounded uppercase">
+                        Strict Veto (-999.0)
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+              {midpoint && (
+                <div className="mt-3 pt-3 border-t border-navy-900/10 text-[11px] font-mono text-navy-900/70 flex items-center justify-between">
+                  <span>Group Midpoint:</span>
+                  <span className="font-bold text-navy-900">
+                    {Number(midpoint.lat).toFixed(4)}, {Number(midpoint.lng).toFixed(4)}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Section 2: Incoming Member Submissions */}
+          {members && members.length > 0 && (
+            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 mb-3 flex items-center gap-1.5">
+                <Sliders size={14} className="text-orange-600" />
+                Incoming Member Submissions (Raw Inputs)
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {members.map((member) => {
+                  const prefs = member.preferences
+                  return (
+                    <div
+                      key={member.id}
+                      className="border border-navy-900/20 bg-background rounded-xl p-3 text-xs flex flex-col justify-between"
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="font-bold text-navy-900 text-sm truncate">{member.name}</span>
+                          <span className="text-[10px] font-mono font-bold bg-navy-900/10 px-1.5 py-0.5 rounded">
+                            Max: {prefs?.max_price || '$$'}
+                          </span>
+                        </div>
+                        <div className="space-y-1">
+                          <div className="text-[11px]">
+                            <span className="font-mono text-navy-900/60 uppercase text-[10px]">Cravings: </span>
+                            <span className="font-bold text-green-700">
+                              {prefs?.cuisines?.length > 0 ? prefs.cuisines.join(', ') : 'None / Wildcard'}
+                            </span>
+                          </div>
+                          {prefs?.vetoed_cuisines?.length > 0 && (
+                            <div className="text-[11px]">
+                              <span className="font-mono text-navy-900/60 uppercase text-[10px]">Vetoed: </span>
+                              <span className="font-bold text-red-600">{prefs.vetoed_cuisines.join(', ')}</span>
+                            </div>
+                          )}
+                          {prefs?.allergies?.length > 0 && (
+                            <div className="text-[11px]">
+                              <span className="font-mono text-navy-900/60 uppercase text-[10px]">Allergies: </span>
+                              <span className="font-bold text-red-700">{prefs.allergies.join(', ')}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Section 3: Candidate Scoring Formulas */}
+          {candidatesMath.length > 0 && (
+            <div className="bg-white rounded-2xl border-2 border-navy-900 p-4 sm:p-5 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
+              <div className="text-xs font-mono font-bold uppercase tracking-wider text-navy-900/70 mb-3 flex items-center gap-1.5">
+                <Calculator size={14} className="text-orange-600" />
+                Algorithm Score Calculations for Top Candidates
+              </div>
+              <div className="space-y-2.5">
+                {candidatesMath.map((cand, idx) => (
+                  <div
+                    key={cand.id || idx}
+                    className="border border-navy-900/20 bg-background rounded-xl p-3 text-xs flex flex-col md:flex-row md:items-center justify-between gap-2"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="w-5 h-5 rounded-full bg-navy-900 text-white font-mono text-[10px] flex items-center justify-center font-bold">
+                          #{idx + 1}
+                        </span>
+                        <span className="font-bold text-sm text-navy-900 truncate">{cand.name}</span>
+                        <span className="text-xs font-bold text-orange-600">({cand.price || '$$'})</span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                        {cand.matched_traits?.map((item, tIdx) => (
+                          <span
+                            key={tIdx}
+                            className="bg-green-100 text-green-800 border border-green-300 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
+                          >
+                            ✓ {item.trait} (+{Number(item.weight).toFixed(1)})
+                          </span>
+                        ))}
+                        {(!cand.matched_traits || cand.matched_traits.length === 0) && (
+                          <span className="text-[10px] font-mono text-navy-900/50">Base distance match</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-col md:items-end justify-center shrink-0">
+                      <div className="font-mono font-bold text-xs bg-navy-900 text-white px-2 py-1 rounded-lg">
+                        Final Score: {Number(cand.final_score).toFixed(2)} pts
+                      </div>
+                      <div className="font-mono text-[10px] text-navy-900/70 mt-1">
+                        {cand.formula || `+${cand.match_score} match - ${cand.distance_penalty} dist`}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -699,6 +995,12 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
         </div>
       )}
 
+      {/* Weights and Consensus Math Inspector */}
+      <WeightsInspector
+        consensusData={lobby?.consensus_data || candidates[0]?._consensus_data}
+        members={lobby?.members}
+      />
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-7xl mx-auto">
         {candidates.map((restaurant, idx) => {
           const isVoted = votedId === restaurant.id
@@ -725,6 +1027,10 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                   alt={restaurant.name}
                   className="w-full h-full object-cover"
                   loading="lazy"
+                  onError={(e) => {
+                    e.currentTarget.onerror = null
+                    e.currentTarget.src = getCuisineFallback(restaurant.cuisines)
+                  }}
                 />
                 
                 {/* Consensus Match Score Badge */}
@@ -756,6 +1062,20 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                   </p>
                 </div>
 
+                {/* Matched Traits Chips */}
+                {restaurant._debug_stats?.matched_traits && restaurant._debug_stats.matched_traits.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {restaurant._debug_stats.matched_traits.map((t, tIdx) => (
+                      <span
+                        key={tIdx}
+                        className="bg-green-100 text-green-900 border border-green-300 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md"
+                      >
+                        ★ {t.trait} (+{Number(t.weight).toFixed(1)})
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {restaurant.address && (
                   <div className="flex items-start gap-1.5 text-xs text-navy-900/70 font-medium pt-2 border-t border-navy-900/10">
                     <MapPin size={14} className="shrink-0 mt-0.5 text-orange-500" />
@@ -765,9 +1085,16 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
 
                 {/* Score and Distance Breakdown */}
                 {restaurant._debug_stats && (
-                  <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex items-center justify-between border border-navy-900/10">
-                    <span className="text-orange-600">Score: {restaurant._debug_stats.final_score}</span>
-                    <span>+{restaurant._debug_stats.match_score} match / -{restaurant._debug_stats.distance_penalty} dist</span>
+                  <div className="mt-2.5 text-[11px] font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg text-navy-900/80 flex flex-col gap-1 border border-navy-900/10">
+                    <div className="flex items-center justify-between">
+                      <span className="text-orange-600">Score: {restaurant._debug_stats.final_score}</span>
+                      <span>+{restaurant._debug_stats.match_score} match / -{restaurant._debug_stats.distance_penalty} dist</span>
+                    </div>
+                    {restaurant._debug_stats.formula && (
+                      <div className="text-[10px] text-navy-900/60 font-medium">
+                        {restaurant._debug_stats.formula}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -833,6 +1160,10 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                 src={winnerImage}
                 alt={winner?.name || 'Winner'}
                 className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.onerror = null
+                  e.currentTarget.src = getCuisineFallback(winner?.cuisines)
+                }}
               />
               <div className="absolute top-4 left-4 bg-orange-500 text-navy-900 font-bold text-xs font-mono px-3.5 py-1.5 rounded-full border-2 border-navy-900 flex items-center gap-1.5 uppercase tracking-wider shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
                 <Trophy size={14} /> The Group Winner
@@ -849,10 +1180,30 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                     <span>{winner.address}</span>
                   </p>
                 )}
+                {/* Winner Matched Traits */}
+                {winner?._debug_stats?.matched_traits && winner._debug_stats.matched_traits.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {winner._debug_stats.matched_traits.map((t, tIdx) => (
+                      <span
+                        key={tIdx}
+                        className="bg-green-100 text-green-900 border border-green-300 text-xs font-mono font-bold px-2 py-0.5 rounded-md"
+                      >
+                        ★ {t.trait} (+{Number(t.weight).toFixed(1)})
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {winner?._debug_stats && (
-                  <div className="mt-3 inline-flex items-center gap-2 text-xs font-mono font-bold bg-navy-900/5 px-2.5 py-1.5 rounded-lg border border-navy-900/10 text-navy-900/80">
-                    <span className="text-orange-600">Score: {winner._debug_stats.final_score}</span>
-                    <span>(+{winner._debug_stats.match_score} match / -{winner._debug_stats.distance_penalty} dist)</span>
+                  <div className="mt-3 flex flex-col gap-1 text-xs font-mono font-bold bg-navy-900/5 px-3 py-2 rounded-xl border border-navy-900/10 text-navy-900/80">
+                    <div className="flex items-center gap-2">
+                      <span className="text-orange-600">Final Score: {winner._debug_stats.final_score}</span>
+                      <span>(+{winner._debug_stats.match_score} match / -{winner._debug_stats.distance_penalty} dist)</span>
+                    </div>
+                    {winner._debug_stats.formula && (
+                      <div className="text-[11px] text-navy-900/60 font-medium">
+                        {winner._debug_stats.formula}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -902,18 +1253,36 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
                 {candidates.filter((c) => c.id !== winner?.id).map((c, idx) => (
                   <div key={c.id} className="bg-white border-2 border-navy-900 rounded-xl p-3 flex items-center justify-between shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full border border-navy-900 flex items-center justify-center font-bold text-xs bg-navy-900/10 font-mono">
-                        #{idx + 2}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden border border-navy-900 shrink-0 relative bg-gray-200">
+                        <img
+                          src={c.image_url || c.image || fallbackImage}
+                          alt={c.name}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.onerror = null
+                            e.currentTarget.src = getCuisineFallback(c.cuisines)
+                          }}
+                        />
                       </div>
                       <div>
-                        <div className="font-bold text-sm">{c.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-mono text-[10px] font-bold bg-navy-900 text-white px-1.5 py-0.5 rounded">
+                            #{idx + 2}
+                          </span>
+                          <span className="font-bold text-sm">{c.name}</span>
+                        </div>
                         <div className="text-xs text-navy-900/60">{c.cuisines?.join(' • ')}</div>
+                        {c._debug_stats && (
+                          <div className="text-[10px] font-mono text-orange-600 font-bold">
+                            Score: {c._debug_stats.final_score}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleOpenDirections(c)}
-                      className="text-xs font-mono font-bold text-orange-600 hover:underline p-1"
+                      className="text-xs font-mono font-bold text-orange-600 hover:underline p-1 shrink-0"
                     >
                       Map ↗
                     </button>
@@ -922,6 +1291,12 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
               </div>
             </div>
           )}
+
+          {/* Weights & Consensus Math Inspector in Results */}
+          <WeightsInspector
+            consensusData={lobby?.consensus_data || candidates[0]?._consensus_data}
+            members={lobby?.members}
+          />
         </div>
 
         {/* Sidebar Summary */}
