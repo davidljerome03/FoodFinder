@@ -54,6 +54,31 @@ function getCuisineFallback(cuisines) {
   return fallbackImage
 }
 
+async function copyToClipboard(text) {
+  if (!text) return false
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+      return true
+    }
+  } catch {}
+  try {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    textarea.style.position = 'fixed'
+    textarea.style.left = '-9999px'
+    textarea.style.top = '0'
+    document.body.appendChild(textarea)
+    textarea.focus()
+    textarea.select()
+    const success = document.execCommand('copy')
+    document.body.removeChild(textarea)
+    return success
+  } catch {
+    return false
+  }
+}
+
 function loadSession() {
   try {
     return JSON.parse(sessionStorage.getItem(SESSION_KEY))
@@ -452,6 +477,17 @@ function EntryScreen({ onJoin }) {
   const [error, setError] = useState('')
   const [location, setLocation] = useState(defaultLocation)
 
+  const cleanCode = (val) => String(val || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase().slice(0, 6)
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const roomParam = params.get('room') || params.get('code')
+    if (roomParam) {
+      const clean = cleanCode(roomParam)
+      if (clean) setCode(clean)
+    }
+  }, [])
+
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
@@ -493,11 +529,12 @@ function EntryScreen({ onJoin }) {
   }
 
   const handleJoin = async () => {
-    if (!name.trim() || !code.trim()) return
+    const sanitizedCode = cleanCode(code)
+    if (!name.trim() || !sanitizedCode) return
     setBusy(true)
     setError('')
     try {
-      const response = await fetch(`/api/lobbies/${encodeURIComponent(code.trim().toUpperCase())}/join`, {
+      const response = await fetch(`/api/lobbies/${encodeURIComponent(sanitizedCode)}/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), location }),
@@ -572,8 +609,16 @@ function EntryScreen({ onJoin }) {
               <input
                 type="text"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                maxLength={6}
+                onChange={(e) => setCode(cleanCode(e.target.value))}
+                onPaste={(e) => {
+                  e.preventDefault()
+                  const pasted = e.clipboardData.getData('text') || ''
+                  setCode(cleanCode(pasted))
+                }}
+                maxLength={8}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck="false"
                 className="w-full px-3 py-3 rounded-xl border-2 border-navy-900 bg-white focus:outline-none focus:border-green-400 uppercase text-center font-mono font-bold text-xl tracking-widest"
                 placeholder="CODE"
               />
@@ -697,6 +742,22 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
     setCustomAllergyInput('')
   }
 
+  const [copied, setCopied] = useState(false)
+
+  const handleCopyCode = async () => {
+    if (!lobby?.lobby_code) return
+    const success = await copyToClipboard(lobby.lobby_code)
+    if (success) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const handleLeave = () => {
+    send('leave_lobby', {})
+    onLeave()
+  }
+
   const handleLockIn = () => {
     send('submit_preferences', {
       desired_cuisines: selectedCuisines,
@@ -728,7 +789,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
           </div>
           <button
             type="button"
-            onClick={onLeave}
+            onClick={handleLeave}
             className="sm:hidden text-xs font-mono uppercase text-navy-900/60 border border-navy-900/20 px-3 py-1.5 rounded-lg"
           >
             Leave
@@ -743,19 +804,27 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
             </span>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 bg-navy-900 text-white px-4 sm:px-6 py-1.5 sm:py-2 rounded-xl">
+          <div
+            onClick={handleCopyCode}
+            className="flex items-center gap-2 sm:gap-3 bg-navy-900 text-white px-3 sm:px-5 py-1.5 sm:py-2 rounded-xl cursor-pointer hover:bg-navy-800 transition-colors select-none shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+            title="Click to copy room code"
+          >
             <span className="text-[11px] font-mono uppercase text-white/60 hidden sm:inline">Room</span>
-            <span className="text-lg sm:text-xl font-bold text-green-400 tracking-widest font-mono">{lobby.lobby_code}</span>
-            <Copy
-              size={16}
-              className="text-white/60 cursor-pointer hover:text-white"
-              onClick={() => navigator.clipboard.writeText(lobby.lobby_code)}
-            />
+            <span className="text-lg sm:text-xl font-bold text-green-400 tracking-widest font-mono">
+              {lobby.lobby_code}
+            </span>
+            {copied ? (
+              <span className="flex items-center gap-1 text-[11px] font-mono font-bold text-green-400 bg-green-950/80 px-2 py-0.5 rounded-md border border-green-500/30">
+                <Check size={14} /> Copied!
+              </span>
+            ) : (
+              <Copy size={16} className="text-white/60 hover:text-white" />
+            )}
           </div>
 
           <button
             type="button"
-            onClick={onLeave}
+            onClick={handleLeave}
             className="hidden sm:inline-block text-xs font-mono uppercase text-navy-900/60 hover:text-navy-900 border border-navy-900/20 px-3 py-1.5 rounded-lg"
           >
             Leave
@@ -1510,15 +1579,29 @@ function LobbyScreen({ session, onLeave }) {
         <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} error={error} clearError={clearError} />
       ) : !lobby ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
-          <h1 className="text-3xl font-bold mb-2">Joining room...</h1>
-          <p className="text-navy-900/60">
-            {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}
-          </p>
-          {error && (
-            <div className="mt-4 p-4 bg-red-100 border-2 border-red-500 rounded-xl text-red-700 text-sm font-bold max-w-md text-center">
-              {error}
+          <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">
+            <div className="w-10 h-10 bg-navy-900 rounded-xl flex items-center justify-center text-white font-bold text-lg mx-auto shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
+              FF
             </div>
-          )}
+            <h1 className="text-2xl sm:text-3xl font-bold">Joining room...</h1>
+            <p className="text-navy-900/60 text-sm font-mono">
+              {connection === 'reconnecting' ? 'Reconnecting to your group...' : 'Connecting to server...'}
+            </p>
+            {error && (
+              <div className="p-3 bg-red-100 border-2 border-red-500 rounded-xl text-red-700 text-xs font-bold break-words">
+                {error}
+              </div>
+            )}
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={onLeave}
+                className="w-full bg-white hover:bg-orange-50 border-2 border-navy-900 py-2.5 rounded-xl text-sm font-bold font-mono text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px]"
+              >
+                Back to Home / Leave
+              </button>
+            </div>
+          </div>
         </div>
       ) : lobby.phase === 'voting' ? (
         <VotingScreen lobby={lobby} session={session} connection={connection} send={send} error={error} clearError={clearError} />

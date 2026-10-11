@@ -188,8 +188,9 @@ async def create_lobby(payload: CreateLobbyRequest):
 @app.post("/api/lobbies/{code}/join")
 async def join_lobby(code: str, payload: JoinLobbyRequest):
     try:
+        clean_code = "".join(ch for ch in code.strip().upper() if ch.isalnum())
         loc_dict = payload.location.model_dump() if payload.location else None
-        lobby, member = await manager.join_lobby(code.upper(), payload.name, location=loc_dict)
+        lobby, member = await manager.join_lobby(clean_code, payload.name, location=loc_dict)
     except LobbyError as error:
         raise HTTPException(error.status_code, detail={"code": error.code, "message": error.message}) from error
     return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}
@@ -210,6 +211,7 @@ async def lobby_socket(socket: WebSocket, code: str):
         await socket.close(code=1008, reason="Origin is not allowed")
         return
     await socket.accept()
+    clean_code = "".join(ch for ch in code.strip().upper() if ch.isalnum())
     lobby = None
     member_id = None
     try:
@@ -227,7 +229,7 @@ async def lobby_socket(socket: WebSocket, code: str):
             await socket.close(code=1008, reason="Authentication required")
             return
         try:
-            lobby, member_id, old_socket, state = await manager.authenticate(code.upper(), first_payload["member_token"], socket)
+            lobby, member_id, old_socket, state = await manager.authenticate(clean_code, first_payload["member_token"], socket)
         except LobbyError as error:
             await send_error(socket, error)
             await socket.close(code=1008, reason="Authentication failed")
@@ -241,7 +243,11 @@ async def lobby_socket(socket: WebSocket, code: str):
                 if event_type == "ping":
                     await socket.send_json({"type": "pong", "payload": {}})
                     continue
-                if event_type == "submit_preferences":
+                if event_type == "leave_lobby":
+                    state = await manager.leave_lobby(lobby, member_id)
+                    await manager.broadcast(lobby, state)
+                    break
+                elif event_type == "submit_preferences":
                     state = await manager.submit_preferences(lobby, member_id, UserPreference.model_validate(event_payload).model_dump())
                 elif event_type == "unlock_preferences":
                     state = await manager.unlock_preferences(lobby, member_id)

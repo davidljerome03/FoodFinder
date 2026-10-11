@@ -63,7 +63,9 @@ class LobbyManager:
 
     @staticmethod
     def _code() -> str:
-        alphabet = string.ascii_uppercase + string.digits
+        # Use unambiguous characters: 2-9, A-Z excluding 0, O, 1, I, L
+        # 31 visually distinct characters that cannot be confused in any font
+        alphabet = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"
         return "".join(secrets.choice(alphabet) for _ in range(6))
 
     @staticmethod
@@ -99,12 +101,28 @@ class LobbyManager:
             return lobby, member
 
     async def get_lobby(self, code: str) -> Lobby:
-        normalized = code.upper()
-        async with self._lobbies_lock:
-            lobby = self._lobbies.get(normalized)
-        if lobby is None:
+        clean = "".join(ch for ch in str(code).strip().upper() if ch.isalnum())
+        if not clean:
             raise LobbyError("LOBBY_NOT_FOUND", "Lobby not found.", 404)
-        return lobby
+        async with self._lobbies_lock:
+            # 1. Exact match
+            if clean in self._lobbies:
+                return self._lobbies[clean]
+
+            # 2. Tolerant match for common character confusions (0/O, 1/I/L)
+            def normalize_ambiguous(s: str) -> str:
+                return (
+                    s.replace("0", "O")
+                    .replace("1", "I")
+                    .replace("L", "I")
+                )
+
+            target = normalize_ambiguous(clean)
+            for existing_code, lobby in self._lobbies.items():
+                if normalize_ambiguous(existing_code) == target:
+                    return lobby
+
+        raise LobbyError("LOBBY_NOT_FOUND", "Lobby not found.", 404)
 
     async def authenticate(self, code: str, token: str, socket: WebSocket) -> tuple[Lobby, str, WebSocket | None, dict[str, Any]]:
         lobby = await self.get_lobby(code)
@@ -117,23 +135,38 @@ class LobbyManager:
             lobby.last_empty_at = None
             return lobby, member.id, old_socket, self._state(lobby)
 
+    async def leave_lobby(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
+        """Handles an explicit user departure when clicking 'Leave'."""
+        async with lobby.lock:
+            socket = lobby.sockets.pop(member_id, None)
+            if member_id in lobby.members:
+                del lobby.members[member_id]
+            if lobby.host_id == member_id and lobby.members:
+                lobby.host_id = next(iter(lobby.members))
+                lobby.members[lobby.host_id].is_host = True
+            if not lobby.sockets:
+                lobby.last_empty_at = time.monotonic()
+            state = self._state(lobby)
+        if socket is not None:
+            await self._close_socket(socket, 1000, "Left lobby")
+        return state
+
     async def disconnect(self, lobby: Lobby, member_id: str, socket: WebSocket) -> tuple[bool, dict[str, Any] | None]:
         async with lobby.lock:
             if lobby.sockets.get(member_id) is not socket:
                 return False, None
             del lobby.sockets[member_id]
 
-            # Ghost User Fix:
-            # When someone closes their tab in preferences, remove them from the active roster
-            # and immediately update host / broadcast headcount to remaining players.
-            if lobby.phase == "preferences":
-                if member_id in lobby.members:
-                    del lobby.members[member_id]
-                # Reassign host if the host left
-                if lobby.host_id == member_id and lobby.members:
-                    lobby.host_id = next(iter(lobby.members))
-                    lobby.members[lobby.host_id].is_host = True
+            if not lobby.sockets:
+                lobby.last_empty_at = time.monotonic()
 
+            # Ghost User Handling:
+            # During preferences phase, NEVER delete the host or solitary user on transient socket drop.
+            # Host needs time to copy/share the code with others without being booted.
+            # Non-host guests get a 30s grace period so quick app switches or blips don't boot them.
+            if lobby.phase == "preferences":
+                if member_id in lobby.members and member_id != lobby.host_id:
+                    asyncio.create_task(self._delayed_member_cleanup(lobby, member_id))
             elif lobby.phase == "voting":
                 if member_id in lobby.votes_expected:
                     lobby.votes_expected.discard(member_id)
@@ -142,17 +175,25 @@ class LobbyManager:
                 # If all remaining expected members have voted, advance to finish
                 if lobby.votes_expected and all(lobby.members[mid].vote for mid in lobby.votes_expected if mid in lobby.members):
                     self._finish(lobby)
-
             elif lobby.phase == "results":
-                # Post-Game Room Stability:
-                # Do NOT clear or reset winner, candidates, or results phase!
-                # Keep the completed results intact even if members leave.
+                # Post-Game Room Stability: Keep completed results intact
                 if member_id in lobby.members:
                     del lobby.members[member_id]
 
-            if not lobby.sockets:
-                lobby.last_empty_at = time.monotonic()
             return True, self._state(lobby)
+
+    async def _delayed_member_cleanup(self, lobby: Lobby, member_id: str, delay: float = 30.0) -> None:
+        await asyncio.sleep(delay)
+        to_broadcast = False
+        state = None
+        async with lobby.lock:
+            if member_id not in lobby.sockets and lobby.phase == "preferences":
+                if member_id in lobby.members and member_id != lobby.host_id:
+                    del lobby.members[member_id]
+                    to_broadcast = True
+                    state = self._state(lobby)
+        if to_broadcast and state is not None:
+            await self.broadcast(lobby, state)
 
     async def submit_preferences(self, lobby: Lobby, member_id: str, preferences: dict[str, Any]) -> dict[str, Any]:
         async with lobby.lock:
