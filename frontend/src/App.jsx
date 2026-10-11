@@ -1159,18 +1159,6 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
   const canAct = connection === 'connected'
   const isHost = lobby?.host_id === session.memberId
   const candidates = lobby?.candidates || []
-  const candidateOffset = lobby?.candidate_offset || 0
-  const startRank = candidateOffset + 1
-  const endRank = candidateOffset + candidates.length
-  const roundNum = Math.floor(candidateOffset / 3) + 1
-
-  const me = lobby?.members?.find((m) => m.id === session.memberId)
-  const hasVotedReroll = me?.voted_reroll || votedId === 'REROLL'
-
-  // Reset local vote selection when round/batch changes
-  useEffect(() => {
-    setVotedId(null)
-  }, [candidateOffset])
 
   // Users can click different restaurants to change their vote dynamically before final result
   const handleVote = (id) => {
@@ -1207,11 +1195,11 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
 
       <div className="max-w-4xl mx-auto text-center mb-6 sm:mb-8">
         <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-1">
-          Round {roundNum} • Candidates #{startRank} – #{endRank}
+          Final Round • Top 3 Candidates
         </div>
         <h1 className="text-3xl sm:text-5xl font-bold tracking-tight mb-2">Cast your vote.</h1>
         <p className="text-sm sm:text-lg text-navy-900/80">
-          Tap an option to vote, or vote to reroll if these aren't popular with the crew!
+          Tap to vote. You can tap another option at any time to change your vote!
         </p>
       </div>
 
@@ -1290,7 +1278,7 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
                 <div>
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <h2 className="text-xl sm:text-2xl font-bold leading-tight">{restaurant.name}</h2>
-                    <span className="text-xs font-mono font-bold text-navy-900/60 uppercase">#{candidateOffset + idx + 1}</span>
+                    <span className="text-xs font-mono font-bold text-navy-900/60 uppercase">#{idx + 1}</span>
                   </div>
                   <p className="text-xs sm:text-sm font-bold text-orange-600 mb-2">
                     {restaurant.cuisines?.join(' • ')}
@@ -1363,112 +1351,6 @@ function VotingScreen({ lobby, session, connection, send, error, clearError }) {
             </button>
           )
         })}
-      </div>
-
-      {/* Reroll Section */}
-      <div className="max-w-7xl mx-auto mt-8 bg-white border-2 border-navy-900 rounded-3xl p-5 sm:p-6 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)]">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-start gap-3.5 text-left w-full md:w-auto">
-            <div className="w-12 h-12 rounded-2xl bg-orange-100 border-2 border-navy-900 flex items-center justify-center text-2xl shrink-0 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-              🎲
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="font-bold text-lg sm:text-xl text-navy-900">None of these options popular?</h3>
-                <span className="text-[11px] font-mono font-bold bg-orange-100 text-orange-900 border border-orange-300 px-2 py-0.5 rounded-full">
-                  {lobby?.reroll_votes || 0} / {lobby?.reroll_majority_needed || 1} votes to reroll
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-navy-900/70 mt-1">
-                {lobby?.has_more_options
-                  ? `Vote to reroll for the next 3 best options (#${endRank + 1} – #${endRank + 3}). Triggers when the majority (${lobby?.reroll_majority_needed || 1} of ${lobby?.votes_expected || 1}) votes for it.`
-                  : 'This is the final batch of candidates! Rerolling will end the session if no consensus is reached.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto justify-end">
-            <button
-              type="button"
-              onClick={() => handleVote('REROLL')}
-              disabled={!canAct}
-              className={`w-full md:w-auto px-6 py-3.5 rounded-2xl border-2 border-navy-900 font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shrink-0
-                ${hasVotedReroll
-                  ? 'bg-orange-500 text-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] ring-4 ring-orange-300/40'
-                  : 'bg-yellow-300 hover:bg-yellow-400 text-navy-900 shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[-2px] hover:translate-y-[-2px] active:translate-x-[2px] active:translate-y-[2px]'
-                }
-              `}
-            >
-              <span>🎲 {hasVotedReroll ? 'Voted to Reroll (Tap to cancel)' : 'Vote to Reroll'}</span>
-            </button>
-            {isHost && (
-              <button
-                type="button"
-                onClick={() => send('end_session')}
-                disabled={!canAct}
-                className="hidden sm:inline-flex text-xs font-mono uppercase bg-white hover:bg-red-50 text-red-700 px-3 py-3 rounded-2xl border-2 border-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
-                title="End the session if crew cannot decide"
-              >
-                End Session
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// -------------------------------------------------------------
-// SCREEN 4: ENDED / NO CONSENSUS SCREEN
-// -------------------------------------------------------------
-function EndedScreen({ lobby, session, onLeave, send }) {
-  const isHost = lobby?.host_id === session?.memberId
-
-  return (
-    <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-6 pb-20 flex flex-col items-center justify-center">
-      <div className="max-w-md w-full bg-card border-2 border-navy-900 rounded-3xl p-6 sm:p-8 text-center space-y-6 shadow-[6px_6px_0px_0px_rgba(28,46,53,1)]">
-        <div className="w-16 h-16 bg-navy-900/10 border-2 border-navy-900 rounded-2xl flex items-center justify-center text-4xl mx-auto shadow-[3px_3px_0px_0px_rgba(28,46,53,1)]">
-          🎲
-        </div>
-
-        <div>
-          <div className="text-xs font-mono font-bold tracking-widest uppercase text-navy-900/60 mb-1">
-            Room {lobby?.lobby_code} • Session Ended
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">No consensus reached.</h1>
-          <p className="text-sm sm:text-base text-navy-900/70 mt-2">
-            The crew couldn't agree on a spot, and all candidate options for this search have been exhausted!
-          </p>
-        </div>
-
-        <div className="bg-white border-2 border-navy-900 rounded-2xl p-4 text-left space-y-2 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-          <div className="text-xs font-mono font-bold uppercase text-navy-900/60">💡 Suggestions for next round</div>
-          <ul className="text-xs text-navy-900/80 space-y-1 list-disc list-inside font-medium">
-            <li>Select more budget tiers (e.g. $$ and $$$).</li>
-            <li>Add more varied cravings or try the "Anything" wildcard.</li>
-            <li>Reduce vetoes so more candidate restaurants qualify.</li>
-          </ul>
-        </div>
-
-        <div className="space-y-3 pt-2">
-          <button
-            type="button"
-            onClick={onLeave}
-            className="w-full bg-orange-500 hover:bg-orange-600 text-navy-900 border-2 border-navy-900 rounded-xl py-3.5 font-bold text-base shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] hover:translate-x-[2px] hover:translate-y-[2px] active:translate-x-[4px] active:translate-y-[4px] transition-transform"
-          >
-            Start New Session / Home
-          </button>
-          {isHost && (
-            <button
-              type="button"
-              onClick={() => send('unlock_preferences')}
-              className="w-full bg-white hover:bg-navy-900/5 text-navy-900 border-2 border-navy-900 rounded-xl py-3 font-bold text-sm font-mono uppercase shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
-            >
-              Adjust Preferences & Try Again
-            </button>
-          )}
-        </div>
       </div>
     </div>
   )
@@ -1752,8 +1634,6 @@ function LobbyScreen({ session, onLeave }) {
       <ErrorToast message={error} onClose={clearError} />
       {activeResults ? (
         <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} error={error} clearError={clearError} />
-      ) : lobby?.phase === 'ended' ? (
-        <EndedScreen lobby={lobby} session={session} onLeave={onLeave} send={send} />
       ) : !lobby ? (
         <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background text-navy-900 font-sans">
           <div className="bg-card border-2 border-navy-900 p-6 sm:p-8 rounded-3xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] max-w-md w-full text-center space-y-4">

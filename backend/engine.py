@@ -596,7 +596,6 @@ def score_restaurants(
     is_wildcard: bool = False,
     group_allergies: Optional[List[str]] = None,
     allowed_prices: Optional[Any] = None,
-    limit: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
     """
     Scores restaurants using the Vector Dot Product with Semantic Overlap.
@@ -712,9 +711,8 @@ def score_restaurants(
     # Highest final_score (desc), closest distance (asc), lowest price (asc)
     scored_restaurants.sort(key=lambda x: (x["final_score"], -x["distance"], -x["price_level"]), reverse=True)
 
-    ranked: List[Dict[str, Any]] = []
-    target_items = scored_restaurants[:limit] if limit is not None else scored_restaurants
-    for item in target_items:
+    top_3: List[Dict[str, Any]] = []
+    for item in scored_restaurants[:3]:
         rest_data = item["restaurant"].copy()
         if include_debug:
             rest_data["_debug_stats"] = {
@@ -727,9 +725,9 @@ def score_restaurants(
                 "matched_traits": item["matched_traits"],
                 "formula": item["formula"],
             }
-        ranked.append(rest_data)
+        top_3.append(rest_data)
 
-    return ranked
+    return top_3
 
 
 def recommend_restaurants(
@@ -882,7 +880,7 @@ def recommend_restaurants(
         or os.getenv("PLACES_API_KEY", "").strip()
     )
 
-    for r in results[:15]:
+    for r in results:
         photo_res = r.get("_photo_resource", "")
         if photo_res and api_key:
             r["image_url"] = resolve_photo_url(photo_res, api_key, r.get("cuisines", []))

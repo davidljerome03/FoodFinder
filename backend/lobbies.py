@@ -47,13 +47,10 @@ class Lobby:
     members: dict[str, Member] = field(default_factory=dict)
     sockets: dict[str, WebSocket] = field(default_factory=dict)
     phase: str = "preferences"
-    all_candidates: list[dict[str, Any]] = field(default_factory=list)
-    candidate_offset: int = 0
     candidates: list[dict[str, Any]] = field(default_factory=list)
     consensus_data: dict[str, Any] | None = None
     votes_expected: set[str] = field(default_factory=set)
     winner: dict[str, Any] | None = None
-    end_reason: str | None = None
     last_empty_at: float | None = None
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
@@ -242,16 +239,10 @@ class LobbyManager:
 
             if not candidates:
                 raise LobbyError("NO_MATCHES", "No restaurants match the group's preferences. Adjust cravings or price and try again.")
-            lobby.all_candidates = candidates
-            lobby.candidate_offset = 0
-            lobby.candidates = candidates[0:3]
+            lobby.candidates = candidates
             lobby.consensus_data = consensus_data
             lobby.phase = "voting"
             lobby.votes_expected = set(lobby.members)
-            lobby.winner = None
-            lobby.end_reason = None
-            for m in lobby.members.values():
-                m.vote = None
             return self._state(lobby)
 
     async def cast_vote(self, lobby: Lobby, member_id: str, restaurant_id: str) -> dict[str, Any]:
@@ -259,73 +250,21 @@ class LobbyManager:
             self._member_for_action(lobby, member_id, "voting")
             if member_id not in lobby.votes_expected:
                 raise LobbyError("NOT_PARTICIPATING", "You are not participating in this vote.")
-
-            if restaurant_id == "REROLL":
-                # Toggle vote to REROLL
-                if lobby.members[member_id].vote == "REROLL":
-                    lobby.members[member_id].vote = None
-                else:
-                    lobby.members[member_id].vote = "REROLL"
-            else:
-                if restaurant_id not in {item["id"] for item in lobby.candidates}:
-                    raise LobbyError("INVALID_CANDIDATE", "Choose one of the current restaurant candidates.")
-                lobby.members[member_id].vote = restaurant_id
-
-            self._check_voting_progress(lobby)
+            if restaurant_id not in {item["id"] for item in lobby.candidates}:
+                raise LobbyError("INVALID_CANDIDATE", "Choose one of the current restaurant candidates.")
+            # Dynamically replace/update vote
+            lobby.members[member_id].vote = restaurant_id
+            active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
+            if active_expected and all(lobby.members[mid].vote for mid in active_expected):
+                self._finish(lobby)
             return self._state(lobby)
-
-    async def vote_reroll(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
-        return await self.cast_vote(lobby, member_id, "REROLL")
-
-    async def end_session(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
-        async with lobby.lock:
-            if lobby.phase not in {"voting", "ended"}:
-                raise LobbyError("INVALID_PHASE", "Session can only be ended during voting.")
-            lobby.phase = "ended"
-            lobby.end_reason = "manual_ended"
-            return self._state(lobby)
-
-    def _check_voting_progress(self, lobby: Lobby) -> None:
-        active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
-        if not active_expected:
-            return
-
-        total_active = len(active_expected)
-        reroll_votes = sum(1 for mid in active_expected if lobby.members[mid].vote == "REROLL")
-        majority_needed = (total_active // 2) + 1
-
-        # Check if majority voted for reroll
-        if reroll_votes >= majority_needed:
-            self._trigger_reroll(lobby)
-            return
-
-        # Check if all active members have submitted votes
-        # (If all have voted and reroll did not reach majority, finish voting!)
-        if all(lobby.members[mid].vote is not None for mid in active_expected):
-            self._finish(lobby)
-
-    def _trigger_reroll(self, lobby: Lobby) -> None:
-        next_offset = lobby.candidate_offset + 3
-        if next_offset < len(lobby.all_candidates):
-            lobby.candidate_offset = next_offset
-            lobby.candidates = lobby.all_candidates[next_offset : next_offset + 3]
-            # Reset all members' votes for the new round
-            for m in lobby.members.values():
-                m.vote = None
-        else:
-            # Ran out of options!
-            lobby.phase = "ended"
-            lobby.end_reason = "no_consensus"
-            lobby.winner = None
-            lobby.candidates = []
 
     async def finish_voting(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
         async with lobby.lock:
             self._host_only(lobby, member_id, "voting")
             active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
-            candidate_ids = {item["id"] for item in lobby.candidates}
-            if not any(lobby.members[mid].vote in candidate_ids for mid in active_expected):
-                raise LobbyError("NO_VOTES", "At least one candidate restaurant vote is required before finishing.")
+            if not any(lobby.members[mid].vote for mid in active_expected):
+                raise LobbyError("NO_VOTES", "At least one vote is required before finishing.")
             self._finish(lobby)
             return self._state(lobby)
 
@@ -428,16 +367,7 @@ class LobbyManager:
         return totals
 
     def _state(self, lobby: Lobby) -> dict[str, Any]:
-        active_expected = [mid for mid in lobby.votes_expected if mid in lobby.members]
-        total_active = len(active_expected)
-        votes_submitted = sum(1 for mid in active_expected if lobby.members[mid].vote is not None)
-        reroll_votes = sum(1 for mid in active_expected if lobby.members[mid].vote == "REROLL")
-        majority_needed = (total_active // 2) + 1 if total_active > 0 else 1
-
-        total_available = len(lobby.all_candidates)
-        current_offset = lobby.candidate_offset
-        has_more_options = (current_offset + len(lobby.candidates)) < total_available
-
+        votes_submitted = sum(1 for member_id in lobby.votes_expected if lobby.members[member_id].vote)
         return {
             "lobby_code": lobby.code,
             "phase": lobby.phase,
@@ -449,24 +379,17 @@ class LobbyManager:
                     "name": item.name,
                     "connected": item.id in lobby.sockets,
                     "has_submitted": item.preferences is not None,
-                    "has_voted": item.vote is not None,
-                    "voted_reroll": item.vote == "REROLL",
-                    "preferences": item.preferences if lobby.phase in {"voting", "results", "ended"} else None,
+                    "has_voted": bool(item.vote),
+                    "preferences": item.preferences if lobby.phase in {"voting", "results"} else None,
                 }
                 for item in lobby.members.values()
             ],
             "candidates": lobby.candidates,
-            "candidate_offset": current_offset,
-            "total_candidates": total_available,
-            "has_more_options": has_more_options,
             "consensus_data": lobby.consensus_data,
             "votes_submitted": votes_submitted,
-            "votes_expected": total_active,
-            "reroll_votes": reroll_votes,
-            "reroll_majority_needed": majority_needed,
+            "votes_expected": len(lobby.votes_expected),
             "vote_totals": self._vote_totals(lobby) if lobby.phase == "results" else {},
             "winner": lobby.winner,
-            "end_reason": lobby.end_reason,
         }
 
 
