@@ -727,12 +727,11 @@ function ResultsScreen({ lobby, session, onLeave, send }) {
   const totalCount = lobby?.members?.length || 0
   const winnerImage = winner?.image_url || winner?.image || fallbackImage
 
+  // Isolate Play Again State:
+  // Clicking Play Again safely resets ONLY the local client state and disconnects this user.
+  // It does NOT emit a global room reset, allowing remaining users to continue viewing the winner.
   const handlePlayAgain = () => {
-    if (send) {
-      send('play_again', {})
-    } else {
-      onLeave()
-    }
+    onLeave()
   }
 
   return (

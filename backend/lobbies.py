@@ -199,19 +199,6 @@ class LobbyManager:
             self._finish(lobby)
             return self._state(lobby)
 
-    async def play_again(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
-        async with lobby.lock:
-            if member_id not in lobby.members:
-                raise LobbyError("MEMBER_NOT_FOUND", "Member not found.")
-            lobby.phase = "preferences"
-            lobby.candidates = []
-            lobby.votes_expected = set()
-            lobby.winner = None
-            for member in lobby.members.values():
-                member.preferences = None
-                member.vote = None
-            return self._state(lobby)
-
     async def remove_member(self, lobby: Lobby, member_id: str, target_id: str) -> dict[str, Any]:
         async with lobby.lock:
             self._host_only(lobby, member_id, "preferences")

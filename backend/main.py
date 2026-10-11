@@ -191,8 +191,6 @@ async def lobby_socket(socket: WebSocket, code: str):
                     state = await manager.cast_vote(lobby, member_id, VotePayload.model_validate(event_payload).restaurant_id)
                 elif event_type == "finish_voting":
                     state = await manager.finish_voting(lobby, member_id)
-                elif event_type == "play_again":
-                    state = await manager.play_again(lobby, member_id)
                 elif event_type == "remove_member":
                     state = await manager.remove_member(lobby, member_id, RemoveMemberPayload.model_validate(event_payload).member_id)
                 else:
