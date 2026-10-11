@@ -1459,13 +1459,15 @@ function EndedScreen({ lobby, session, onLeave, send }) {
           >
             Start New Session / Home
           </button>
-          <button
-            type="button"
-            onClick={() => send('restart_session')}
-            className="w-full bg-white hover:bg-navy-900/5 text-navy-900 border-2 border-navy-900 rounded-xl py-3 font-bold text-sm font-mono uppercase shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
-          >
-            Adjust Preferences & Try Again
-          </button>
+          {isHost && (
+            <button
+              type="button"
+              onClick={() => send('unlock_preferences')}
+              className="w-full bg-white hover:bg-navy-900/5 text-navy-900 border-2 border-navy-900 rounded-xl py-3 font-bold text-sm font-mono uppercase shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]"
+            >
+              Adjust Preferences & Try Again
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -1475,44 +1477,17 @@ function EndedScreen({ lobby, session, onLeave, send }) {
 // -------------------------------------------------------------
 // SCREEN 4: WINNER / RESULTS SCREEN (Podium + Google Maps Deep Link)
 // -------------------------------------------------------------
-function ResultsScreen({ lobby, session, onLeave, onJoin, send }) {
+function ResultsScreen({ lobby, session, onLeave, send }) {
   const winner = lobby?.winner
   const candidates = lobby?.candidates || []
   const totalCount = lobby?.members?.length || 0
   const winnerImage = winner?.image_url || winner?.image || fallbackImage
-  const [playAgainLoading, setPlayAgainLoading] = useState(false)
-  const nextLobbyCode = lobby?.next_lobby_code
 
-  // Play Again: Takes everyone who clicks it to the SAME new lobby to set new preferences together!
-  const handlePlayAgain = async () => {
-    if (playAgainLoading) return
-    setPlayAgainLoading(true)
-    try {
-      const resp = await fetch(`/api/lobbies/${encodeURIComponent(lobby.lobby_code)}/play_again`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: session?.name || 'Player',
-          location: session?.location || lobby?.group_location,
-        }),
-      })
-      const data = await resp.json()
-      if (!resp.ok) {
-        throw new Error(data?.detail?.message || 'Failed to start or join new lobby.')
-      }
-      onJoin({
-        lobbyCode: data.lobby_code,
-        memberId: data.member_id,
-        memberToken: data.member_token,
-        name: session?.name || 'Player',
-        location: session?.location || lobby?.group_location,
-      })
-    } catch (err) {
-      console.error('Play Again error:', err)
-      onLeave()
-    } finally {
-      setPlayAgainLoading(false)
-    }
+  // Isolate Play Again State:
+  // Clicking Play Again safely resets ONLY the local client state and disconnects this user.
+  // It does NOT emit a global room reset, allowing remaining users to continue viewing the winner.
+  const handlePlayAgain = () => {
+    onLeave()
   }
 
   return (
@@ -1625,12 +1600,6 @@ function ResultsScreen({ lobby, session, onLeave, onJoin, send }) {
               <Navigation size={28} />
             </button>
 
-            {nextLobbyCode && (
-              <div className="bg-yellow-100 border-2 border-navy-900 rounded-2xl p-3 text-center text-xs font-mono font-bold text-navy-900 shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
-                🎉 Your crew started Room <span className="text-orange-600 underline font-extrabold">{nextLobbyCode}</span> for the next round! Click below to jump in!
-              </div>
-            )}
-
             <div className="flex flex-col sm:flex-row justify-center items-center gap-4 pt-2 text-xs font-mono font-bold tracking-widest uppercase text-navy-900/70">
               <button
                 type="button"
@@ -1643,19 +1612,9 @@ function ResultsScreen({ lobby, session, onLeave, onJoin, send }) {
               <button
                 type="button"
                 onClick={handlePlayAgain}
-                disabled={playAgainLoading}
-                className={`hover:text-navy-900 flex items-center gap-1.5 px-4 py-2 border-2 border-navy-900 rounded-xl shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px] transition-colors
-                  ${nextLobbyCode ? 'bg-yellow-300 hover:bg-yellow-400 font-bold' : 'bg-green-400 hover:bg-green-500'}
-                `}
+                className="hover:text-navy-900 flex items-center gap-1.5 px-4 py-2 bg-green-400 border-2 border-navy-900 rounded-xl shadow-[2px_2px_0px_0px_rgba(28,46,53,1)] active:translate-x-[2px] active:translate-y-[2px]"
               >
-                <RotateCcw size={14} className={playAgainLoading ? 'animate-spin' : ''} />
-                <span>
-                  {playAgainLoading
-                    ? 'Connecting to new room...'
-                    : nextLobbyCode
-                    ? `Play Again (Join Room ${nextLobbyCode})`
-                    : 'Play Again (New Round)'}
-                </span>
+                <RotateCcw size={14} /> Play Again (New Round)
               </button>
             </div>
           </div>
@@ -1762,7 +1721,7 @@ function ResultsScreen({ lobby, session, onLeave, onJoin, send }) {
 // -------------------------------------------------------------
 // MAIN CONTAINER (Decoupled Post-Game Room Stability)
 // -------------------------------------------------------------
-function LobbyScreen({ session, onLeave, onJoin }) {
+function LobbyScreen({ session, onLeave }) {
   const [persistedResults, setPersistedResults] = useState(null)
 
   const lobbyExpired = useCallback(() => {
@@ -1792,7 +1751,7 @@ function LobbyScreen({ session, onLeave, onJoin }) {
     <>
       <ErrorToast message={error} onClose={clearError} />
       {activeResults ? (
-        <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} onJoin={onJoin} send={send} error={error} clearError={clearError} />
+        <ResultsScreen lobby={activeResults} session={session} onLeave={onLeave} send={send} error={error} clearError={clearError} />
       ) : lobby?.phase === 'ended' ? (
         <EndedScreen lobby={lobby} session={session} onLeave={onLeave} send={send} />
       ) : !lobby ? (
@@ -1853,7 +1812,7 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      {session ? <LobbyScreen session={session} onLeave={leaveLobby} onJoin={joinLobby} /> : <EntryScreen onJoin={joinLobby} />}
+      {session ? <LobbyScreen session={session} onLeave={leaveLobby} /> : <EntryScreen onJoin={joinLobby} />}
     </ErrorBoundary>
   )
 }

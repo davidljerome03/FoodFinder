@@ -221,17 +221,6 @@ async def join_lobby(code: str, payload: JoinLobbyRequest):
     return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}
 
 
-@app.post("/api/lobbies/{code}/play_again")
-async def play_again(code: str, payload: JoinLobbyRequest):
-    try:
-        clean_code = "".join(ch for ch in code.strip().upper() if ch.isalnum())
-        loc_dict = payload.location.model_dump() if payload.location else None
-        lobby, member = await manager.play_again(clean_code, payload.name, location=loc_dict)
-    except LobbyError as error:
-        raise HTTPException(error.status_code, detail={"code": error.code, "message": error.message}) from error
-    return {"lobby_code": lobby.code, "member_id": member.id, "member_token": member.token}
-
-
 async def send_error(socket: WebSocket, error: LobbyError) -> None:
     await socket.send_json({"type": "error", "payload": {"code": error.code, "message": error.message}})
 
@@ -287,8 +276,6 @@ async def lobby_socket(socket: WebSocket, code: str):
                     state = await manager.submit_preferences(lobby, member_id, UserPreference.model_validate(event_payload).model_dump())
                 elif event_type == "unlock_preferences":
                     state = await manager.unlock_preferences(lobby, member_id)
-                elif event_type == "restart_session":
-                    state = await manager.restart_session(lobby, member_id)
                 elif event_type == "start_voting":
                     state = await manager.start_voting(lobby, member_id)
                 elif event_type == "cast_vote":

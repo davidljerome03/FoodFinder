@@ -680,32 +680,15 @@ def score_restaurants(
                     allergy_penalty += 2.5
                     conflicted_allergies.append(format_cuisine_type(a_clean))
 
-        # 3. Distance & Proximity Weight System (Push closer places over farther places)
+        # 3. Distance Penalty (0.25 points per mile away from midpoint)
         coords = extract_coords(rest.get("coordinates"), group_location)
         rest_lat = coords["lat"]
         rest_lng = coords["lng"]
         distance = haversine_distance(group_location["lat"], group_location["lng"], rest_lat, rest_lng)
-
-        # Base distance penalty (0.75 points per mile away from midpoint)
-        # Plus accelerated penalty for far distances (> 5.0 miles)
-        base_dist_penalty = distance * 0.75
-        far_penalty = max(0.0, (distance - 5.0) * 0.5)
-        distance_penalty = base_dist_penalty + far_penalty
-
-        # Proximity Bonus for very close dining options:
-        # Immediate proximity (<= 1.0 mi): +1.50 pts
-        # Close vicinity (1.0 < mi <= 2.5): +0.75 pts
-        proximity_bonus = 0.0
-        if distance <= 1.0:
-            proximity_bonus = 1.50
-        elif distance <= 2.5:
-            proximity_bonus = 0.75
-
-        final_score = dot_product_score + proximity_bonus - allergy_penalty - distance_penalty
+        distance_penalty = distance * 0.25
+        final_score = dot_product_score - allergy_penalty - distance_penalty
 
         formula_parts = [f"+{dot_product_score:.2f} (Match)"]
-        if proximity_bonus > 0:
-            formula_parts.append(f"+ {proximity_bonus:.2f} (Proximity Boost: {distance:.1f} mi)")
         if allergy_penalty > 0:
             conflict_str = ", ".join(conflicted_allergies)
             formula_parts.append(f"- {allergy_penalty:.2f} (Allergy: {conflict_str})")
@@ -718,7 +701,6 @@ def score_restaurants(
             "distance": distance,
             "price_level": rest_price_level,
             "match_score": dot_product_score,
-            "proximity_bonus": proximity_bonus,
             "allergy_penalty": allergy_penalty,
             "conflicted_allergies": conflicted_allergies,
             "distance_penalty": distance_penalty,
@@ -737,7 +719,6 @@ def score_restaurants(
         if include_debug:
             rest_data["_debug_stats"] = {
                 "match_score": round(item["match_score"], 2),
-                "proximity_bonus": round(item["proximity_bonus"], 2),
                 "allergy_penalty": round(item["allergy_penalty"], 2),
                 "conflicted_allergies": item["conflicted_allergies"],
                 "distance_penalty": round(item["distance_penalty"], 2),
