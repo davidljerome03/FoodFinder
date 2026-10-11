@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -48,10 +50,8 @@ class UserPreference(BaseModel):
         cleaned: list[str] = []
         for cuisine in cuisines:
             normalized = cuisine.strip().lower()
-            if not normalized or len(normalized) > 30:
-                raise ValueError("Cuisine names must be between 1 and 30 characters.")
-            if normalized not in SUPPORTED_CUISINES:
-                raise ValueError(f"Unsupported cuisine: {cuisine}")
+            if not normalized or len(normalized) > 40:
+                raise ValueError("Cuisine names must be between 1 and 40 characters.")
             if normalized not in cleaned:
                 cleaned.append(normalized)
         return cleaned
@@ -188,6 +188,8 @@ async def lobby_socket(socket: WebSocket, code: str):
                     state = await manager.cast_vote(lobby, member_id, VotePayload.model_validate(event_payload).restaurant_id)
                 elif event_type == "finish_voting":
                     state = await manager.finish_voting(lobby, member_id)
+                elif event_type == "play_again":
+                    state = await manager.play_again(lobby, member_id)
                 elif event_type == "remove_member":
                     state = await manager.remove_member(lobby, member_id, RemoveMemberPayload.model_validate(event_payload).member_id)
                 else:

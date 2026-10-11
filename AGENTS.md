@@ -30,6 +30,8 @@ The frontend and backend communicate via this agreed-upon structure. Do not devi
   "name": "Burger Joint",
   "price": "$$",
   "cuisines": ["American", "Burgers"],
-  "coordinates": {"lat": 28.5383, "lng": -81.3792}
+  "coordinates": {"lat": 28.5383, "lng": -81.3792},
+  "image_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+  "address": "123 Main St, Orlando, FL 32801"
 }
 ```

@@ -1,4 +1,5 @@
 """In-memory lobby state for the single-process hackathon demo."""
+from __future__ import annotations
 
 import asyncio
 import json
@@ -159,6 +160,19 @@ class LobbyManager:
             if not any(lobby.members[mid].vote for mid in lobby.votes_expected):
                 raise LobbyError("NO_VOTES", "At least one vote is required before finishing.")
             self._finish(lobby)
+            return self._state(lobby)
+
+    async def play_again(self, lobby: Lobby, member_id: str) -> dict[str, Any]:
+        async with lobby.lock:
+            if member_id not in lobby.members:
+                raise LobbyError("MEMBER_NOT_FOUND", "Member not found.")
+            lobby.phase = "preferences"
+            lobby.candidates = []
+            lobby.votes_expected = set()
+            lobby.winner = None
+            for member in lobby.members.values():
+                member.preferences = None
+                member.vote = None
             return self._state(lobby)
 
     async def remove_member(self, lobby: Lobby, member_id: str, target_id: str) -> dict[str, Any]:
