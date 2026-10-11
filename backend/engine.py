@@ -139,9 +139,53 @@ IGNORED_PLACE_TYPES = {
 }
 
 
+# Comprehensive Cuisine and Dish Synonyms for Semantic Overlap
+CUISINE_SYNONYMS: Dict[str, set[str]] = {
+    "mexican": {"mexican", "taco", "tacos", "burrito", "burritos", "taqueria", "cantina", "tex_mex", "tex-mex", "latin_american", "quesadilla", "fajita", "tortilla"},
+    "italian": {"italian", "pasta", "trattoria", "osteria", "pizzeria", "gelato", "risotto"},
+    "pizza": {"pizza", "pizzeria", "slice", "pies", "italian"},
+    "sushi": {"sushi", "sashimi", "nigiri", "maki", "roll", "japanese", "raw_fish"},
+    "japanese": {"japanese", "sushi", "ramen", "izakaya", "hibachi", "teriyaki", "udon"},
+    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "shake", "patty", "fast_food", "american"},
+    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "shake", "patty", "fast_food", "american"},
+    "thai": {"thai", "pad_thai", "pad thai", "curry", "siamese", "southeast_asian"},
+    "seafood": {"seafood", "fish", "crab", "lobster", "oyster", "shrimp", "clam"},
+    "chinese": {"chinese", "dim_sum", "dim sum", "dumpling", "wok", "cantonese", "szechuan", "asian"},
+    "vietnamese": {"vietnamese", "pho", "banh_mi", "banh mi"},
+    "bbq": {"bbq", "barbecue", "smokehouse", "ribs", "brisket"},
+    "steak": {"steak", "steakhouse", "chophouse", "grill"},
+    "steakhouse": {"steakhouse", "steak", "chophouse", "grill"},
+    "mediterranean": {"mediterranean", "greek", "gyro", "falafel", "shawarma", "hummus", "kebab", "middle_eastern"},
+    "bakery": {"bakery", "bake", "pastry", "bagel", "donut", "doughnut"},
+    "dessert": {"dessert", "ice_cream", "ice cream", "sweet", "crepe"},
+    "cafe": {"cafe", "coffee", "espresso", "bistro"},
+    "american": {"american", "diner", "wings", "sports_bar", "burger"},
+}
+
+
+def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
+    """
+    Checks if two cuisine or dish tags overlap directly, as substrings,
+    or via known cuisine synonym groups (e.g. 'Tacos' matches 'Mexican', 'Burger' matches 'Burgers').
+    """
+    a = str(cuisine_a).strip().lower().replace("-", "_")
+    b = str(cuisine_b).strip().lower().replace("-", "_")
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    if a in b or b in a:
+        return True
+    for key, syns in CUISINE_SYNONYMS.items():
+        all_syns = syns | {key}
+        if any(s in a or a in s for s in all_syns) and any(s in b or b in s for s in all_syns):
+            return True
+    return False
+
+
 def format_cuisine_type(place_type: str) -> str:
     """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican')."""
-    name = place_type.lower()
+    name = str(place_type).lower()
     for suffix in ["_restaurant", "_food", "_store"]:
         if name.endswith(suffix):
             name = name[:-len(suffix)]
@@ -149,8 +193,13 @@ def format_cuisine_type(place_type: str) -> str:
     return " ".join(w.capitalize() for w in words)
 
 
-def extract_cuisines(types: List[str]) -> List[str]:
-    """Filters generic place types and extracts readable cuisine names."""
+def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -> List[str]:
+    """
+    Filters generic place types and extracts readable cuisine names from:
+    1. Google Places types (e.g. mexican_restaurant -> Mexican)
+    2. Restaurant display name keywords (e.g. 'Poblano Mexican Grill' -> Mexican)
+    3. Targeted search query hint
+    """
     cuisines: List[str] = []
     for t in types:
         t_clean = str(t).strip().lower()
@@ -158,7 +207,120 @@ def extract_cuisines(types: List[str]) -> List[str]:
             formatted = format_cuisine_type(t_clean)
             if formatted and formatted not in cuisines:
                 cuisines.append(formatted)
+
+    name_lower = name.lower()
+    for cat, syns in CUISINE_SYNONYMS.items():
+        if any(s in name_lower for s in syns):
+            formatted_cat = format_cuisine_type(cat)
+            if formatted_cat and formatted_cat not in cuisines:
+                cuisines.append(formatted_cat)
+
+    if hint_cuisine:
+        formatted_hint = format_cuisine_type(hint_cuisine)
+        if formatted_hint and formatted_hint not in cuisines:
+            cuisines.append(formatted_hint)
+
     return cuisines if cuisines else ["Restaurant"]
+
+
+def _parse_place_item(p: Dict[str, Any], location: Dict[str, float], hint_cuisine: str = "") -> Optional[Dict[str, Any]]:
+    """Helper to parse a single Google Places (New) place object into our API contract."""
+    place_id = str(p.get("id") or "")
+    if not place_id:
+        return None
+
+    display_name_obj = p.get("displayName") or {}
+    name = str(display_name_obj.get("text") or "Unknown Restaurant")
+
+    raw_price = p.get("priceLevel") or "PRICE_LEVEL_MODERATE"
+    price = PRICE_MAP.get(str(raw_price), "$$")
+
+    raw_types = p.get("types") or []
+    cuisines = extract_cuisines(raw_types, name=name, hint_cuisine=hint_cuisine)
+
+    loc = p.get("location") or {}
+    coords = {
+        "lat": float(loc.get("latitude") or location.get("lat", 28.5383)),
+        "lng": float(loc.get("longitude") or location.get("lng", -81.3792)),
+    }
+
+    address = str(p.get("formattedAddress") or "Address unavailable")
+
+    photos = p.get("photos") or []
+    photo_resource = ""
+    if isinstance(photos, list) and photos:
+        first_photo = photos[0]
+        if isinstance(first_photo, dict) and first_photo.get("name"):
+            photo_resource = str(first_photo["name"]).strip("/")
+
+    initial_image = (
+        f"/api/photos?name={urllib.parse.quote(photo_resource)}"
+        if photo_resource
+        else get_cuisine_image(cuisines)
+    )
+
+    return {
+        "id": place_id,
+        "name": name,
+        "price": price,
+        "cuisines": cuisines,
+        "coordinates": coords,
+        "image_url": initial_image,
+        "_photo_resource": photo_resource,
+        "address": address,
+        "is_open": True,
+    }
+
+
+def search_places_by_text(query: str, location: Dict[str, float], radius_meters: int = 15000) -> List[Dict[str, Any]]:
+    """
+    Searches for restaurants matching a specific cuisine or craving using Google Places API (New) Text Search
+    (POST https://places.googleapis.com/v1/places:searchText).
+    Guarantees discovery of genuine matching restaurants even if nearby pool is saturated with generic chains.
+    """
+    api_key = (
+        os.getenv("GOOGLE_PLACES_API_KEY", "").strip()
+        or os.getenv("GOOGLE_API_KEY", "").strip()
+        or os.getenv("PLACES_API_KEY", "").strip()
+    )
+    if not api_key:
+        return []
+
+    url = "https://places.googleapis.com/v1/places:searchText"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": api_key,
+        "X-Goog-FieldMask": "places.id,places.displayName,places.priceLevel,places.types,places.location,places.photos,places.formattedAddress",
+    }
+    body = {
+        "textQuery": f"{query} restaurant",
+        "locationBias": {
+            "circle": {
+                "center": {
+                    "latitude": float(location.get("lat", 28.5383)),
+                    "longitude": float(location.get("lng", -81.3792)),
+                },
+                "radius": min(float(radius_meters), 50000.0),
+            }
+        },
+        "maxResultCount": 20,
+    }
+    req_data = json.dumps(body).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers=headers, method="POST")
+
+    try:
+        with urllib.request.urlopen(req, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+            places = payload.get("places", [])
+            results: List[Dict[str, Any]] = []
+            for p in places:
+                item = _parse_place_item(p, location, hint_cuisine=query)
+                if item:
+                    results.append(item)
+            return results
+    except Exception as exc:
+        logger.warning("Google Places API Text Search failed for '%s': %s", query, exc)
+        return []
 
 
 def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000) -> List[Dict[str, Any]]:
@@ -208,52 +370,9 @@ def fetch_live_restaurants(location: Dict[str, float], radius_meters: int = 8000
             live_results: List[Dict[str, Any]] = []
 
             for p in places:
-                place_id = str(p.get("id") or "")
-                if not place_id:
-                    continue
-
-                display_name_obj = p.get("displayName") or {}
-                name = str(display_name_obj.get("text") or "Unknown Restaurant")
-
-                raw_price = p.get("priceLevel") or "PRICE_LEVEL_MODERATE"
-                price = PRICE_MAP.get(str(raw_price), "$$")
-
-                raw_types = p.get("types") or []
-                cuisines = extract_cuisines(raw_types)
-
-                loc = p.get("location") or {}
-                coords = {
-                    "lat": float(loc.get("latitude") or location.get("lat", 28.5383)),
-                    "lng": float(loc.get("longitude") or location.get("lng", -81.3792)),
-                }
-
-                address = str(p.get("formattedAddress") or "Address unavailable")
-
-                photos = p.get("photos") or []
-                photo_resource = ""
-                if isinstance(photos, list) and photos:
-                    first_photo = photos[0]
-                    if isinstance(first_photo, dict) and first_photo.get("name"):
-                        photo_resource = str(first_photo["name"]).strip("/")
-
-                # Safe initial image: backend proxy if photo exists, else rich cuisine fallback
-                initial_image = (
-                    f"/api/photos?name={urllib.parse.quote(photo_resource)}"
-                    if photo_resource
-                    else get_cuisine_image(cuisines)
-                )
-
-                live_results.append({
-                    "id": place_id,
-                    "name": name,
-                    "price": price,
-                    "cuisines": cuisines,
-                    "coordinates": coords,
-                    "image_url": initial_image,
-                    "_photo_resource": photo_resource,
-                    "address": address,
-                    "is_open": True,
-                })
+                item = _parse_place_item(p, location)
+                if item:
+                    live_results.append(item)
 
             if not live_results:
                 logger.warning("Google Places API returned 0 restaurants for coordinates %s", location)
@@ -337,16 +456,19 @@ def score_restaurants(
     is_wildcard: bool = False,
 ) -> List[Dict[str, Any]]:
     """
-    Scores restaurants using the Vector Dot Product.
+    Scores restaurants using the Vector Dot Product with Semantic Overlap.
     STRICT ALGORITHM ANTI-HALLUCINATION:
-    Any restaurant with a 0% consensus score (dot product <= 0 with desired cuisines)
-    is strictly filtered out so unpicked cuisines (e.g. sushi) are NEVER hallucinated.
+    Any restaurant with a 0% consensus score (0 matching traits with group cravings)
+    is strictly filtered out so unpicked cuisines are NEVER recommended.
     """
     price_levels = {"$": 1, "$$": 2, "$$$": 3, "$$$$": 4}
     max_level = price_levels.get(group_max_price, 4)
 
     if group_location is None:
         group_location = {"lat": 28.5383, "lng": -81.3792}
+
+    positive_traits = {k: v for k, v in consensus_vector.items() if v > 0}
+    negative_traits = {k: v for k, v in consensus_vector.items() if v < 0}
 
     scored_restaurants: List[Dict[str, Any]] = []
 
@@ -357,23 +479,33 @@ def score_restaurants(
 
         cuisines = [str(c).strip().lower() for c in rest.get("cuisines", [])]
 
-        # Check for any veto hit
-        if any(consensus_vector.get(c, 0.0) < -50.0 for c in cuisines):
+        # Check for any strict veto or allergy hit
+        has_veto = False
+        for c in cuisines:
+            for neg_tag, neg_wt in negative_traits.items():
+                if neg_wt <= -50.0 and traits_overlap(c, neg_tag):
+                    has_veto = True
+                    break
+            if has_veto:
+                break
+        if has_veto:
             continue
 
-        # 1. Base Score: Vector Dot Product
-        # Dot product = sum(consensus_vector[cuisine] * restaurant_vector[cuisine])
+        # 1. Base Score: Vector Dot Product with Semantic Overlap
         dot_product_score = 0.0
         matching_traits = []
-        for c in cuisines:
-            weight = consensus_vector.get(c, 0.0)
-            if weight > 0:
-                dot_product_score += weight
-                matching_traits.append({"trait": format_cuisine_type(c), "weight": round(weight, 2)})
+        matched_pos_keys = set()
 
-        # ANTI-HALLUCINATION ENFORCEMENT:
-        # If no wildcard is active and this restaurant has 0 matching consensus traits (0% score),
-        # strictly filter it out!
+        for c in cuisines:
+            for pos_tag, pos_wt in positive_traits.items():
+                if pos_tag not in matched_pos_keys and traits_overlap(c, pos_tag):
+                    dot_product_score += pos_wt
+                    matching_traits.append({"trait": format_cuisine_type(c), "weight": round(pos_wt, 2)})
+                    matched_pos_keys.add(pos_tag)
+
+        # STRICT ANTI-HALLUCINATION ENFORCEMENT:
+        # If no wildcard is active, this restaurant MUST have at least one matching trait and dot_product_score > 0!
+        # Restaurants with 0% match / 0 matching traits are STRICTLY FILTERED OUT!
         if not is_wildcard and (len(matching_traits) == 0 or dot_product_score <= 0.0):
             continue
 
@@ -450,8 +582,32 @@ def recommend_restaurants(
     ]
     is_wildcard = (len(all_desired) == 0) or all(c == "anything" for c in all_desired)
 
-    # Fetch live Google Places API (New) restaurants
+    # Calculate consensus vector
+    vector = calculate_consensus_vector(mood_requests)
+
+    # Collect desired cuisines with positive votes
+    positive_desired = [
+        str(k).strip() for k, v in vector.items() if v > 0
+    ]
+
+    # Fetch live Google Places API (New) restaurants (Nearby Search)
     raw_restaurants = fetch_live_restaurants(location=midpoint)
+
+    # If the group has specific cravings, check if raw_restaurants contains enough matching places.
+    # If not, perform targeted search_places_by_text for the requested cuisines!
+    if not is_wildcard and positive_desired:
+        for craving in positive_desired[:3]:
+            match_count = sum(
+                1 for r in raw_restaurants
+                if any(traits_overlap(c, craving) for c in r.get("cuisines", []))
+            )
+            if match_count < 3:
+                targeted_places = search_places_by_text(craving, midpoint)
+                existing_ids = {r["id"] for r in raw_restaurants}
+                for tp in targeted_places:
+                    if tp["id"] not in existing_ids:
+                        raw_restaurants.append(tp)
+                        existing_ids.add(tp["id"])
 
     vetoes = {
         str(cuisine).strip().lower()
@@ -485,11 +641,12 @@ def recommend_restaurants(
         r for r in raw_restaurants
         if r.get("is_open", True)
         and price_levels.get(r.get("price"), 1) <= max_price
-        and not vetoes.intersection(str(c).strip().lower() for c in r.get("cuisines", []))
+        and not any(
+            any(traits_overlap(c, v) for c in r.get("cuisines", []))
+            for v in vetoes
+        )
         and not has_allergy_conflict(r)
     ]
-
-    vector = calculate_consensus_vector(mood_requests)
 
     results = score_restaurants(
         consensus_vector=vector,
@@ -500,9 +657,8 @@ def recommend_restaurants(
         is_wildcard=is_wildcard,
     )
 
-    # Fallback to top eligible open restaurants if strict overlap is empty
-    if not results and eligible:
-        results = eligible[:3]
+    # STRICT RULE: NEVER fall back to zero-weight places!
+    # If no restaurants match what the users put in, results strictly remains empty.
 
     # Resolve direct Google CDN photoUri for the winning voting options using server credentials
     api_key = (
