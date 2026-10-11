@@ -6,7 +6,7 @@ import logging
 import os
 import urllib.request
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import Annotated, Any, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -88,6 +88,16 @@ class VotePayload(BaseModel):
 
 class RemoveMemberPayload(BaseModel):
     member_id: Annotated[str, Field(min_length=1, max_length=100)]
+
+
+Location.model_rebuild()
+NameRequest.model_rebuild()
+CreateLobbyRequest.model_rebuild()
+JoinLobbyRequest.model_rebuild()
+UserPreference.model_rebuild()
+GroupRequest.model_rebuild()
+VotePayload.model_rebuild()
+RemoveMemberPayload.model_rebuild()
 
 
 def recommend(preferences: list[dict[str, Any]], location: dict[str, float]) -> tuple[list[dict[str, Any]], dict[str, Any]]:

@@ -512,8 +512,20 @@ function EntryScreen({ onJoin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), group_location: location }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.detail?.message || data.detail || 'Could not create lobby.')
+      let data = null
+      try {
+        data = await response.json()
+      } catch {
+        data = null
+      }
+      if (!response.ok) {
+        const errorMsg =
+          data?.detail?.message ||
+          (typeof data?.detail === 'string' ? data.detail : null) ||
+          (Array.isArray(data?.detail) ? data.detail[0]?.msg : null) ||
+          'Could not create lobby. Please try again.'
+        throw new Error(errorMsg)
+      }
       onJoin({
         lobbyCode: data.lobby_code,
         memberId: data.member_id,
@@ -530,7 +542,14 @@ function EntryScreen({ onJoin }) {
 
   const handleJoin = async () => {
     const sanitizedCode = cleanCode(code)
-    if (!name.trim() || !sanitizedCode) return
+    if (!name.trim()) {
+      setError('Please enter your name.')
+      return
+    }
+    if (!sanitizedCode) {
+      setError('Please enter a room code.')
+      return
+    }
     setBusy(true)
     setError('')
     try {
@@ -539,8 +558,22 @@ function EntryScreen({ onJoin }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: name.trim(), location }),
       })
-      const data = await response.json()
-      if (!response.ok) throw new Error(data.detail?.message || data.detail || 'Could not join lobby.')
+      let data = null
+      try {
+        data = await response.json()
+      } catch {
+        data = null
+      }
+      if (!response.ok) {
+        const errorMsg =
+          data?.detail?.message ||
+          (typeof data?.detail === 'string' ? data.detail : null) ||
+          (Array.isArray(data?.detail) ? data.detail[0]?.msg : null) ||
+          (response.status === 404
+            ? 'Lobby not found. Please check the room code and try again.'
+            : 'Could not join lobby. Please try again.')
+        throw new Error(errorMsg)
+      }
       onJoin({
         lobbyCode: data.lobby_code,
         memberId: data.member_id,

@@ -44,7 +44,18 @@ export function useLobbySocket({ lobbyCode, memberToken, onLobbyExpired }) {
     const connect = () => {
       clearTimers()
       setConnection('connecting')
-      const socket = new WebSocket(socketUrl(lobbyCode))
+      let socket = null
+      try {
+        socket = new WebSocket(socketUrl(lobbyCode))
+      } catch (err) {
+        console.error('WebSocket connection error:', err)
+        setError('Could not establish real-time connection. Reconnecting...')
+        setConnection('reconnecting')
+        const delay = reconnectDelays[Math.min(retryRef.current, reconnectDelays.length - 1)]
+        retryRef.current += 1
+        reconnectTimerRef.current = window.setTimeout(connect, delay)
+        return
+      }
       activeSocket = socket
       socketRef.current = socket
       socket.onopen = () => {
