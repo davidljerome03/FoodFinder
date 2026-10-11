@@ -31,7 +31,8 @@ CUISINE_IMAGE_MAP: Dict[str, str] = {
     "burgers": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
     "burger": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
     "american": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
-    "fast food": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&q=80&w=1000",
+    "fast food": "https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&q=80&w=1000",
+    "fast_food": "https://images.unsplash.com/photo-1561758033-d89a9ad46330?auto=format&fit=crop&q=80&w=1000",
     "thai": "https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000",
     "vietnamese": "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?auto=format&fit=crop&q=80&w=1000",
     "asian": "https://images.unsplash.com/photo-1559314809-0d155014e29e?auto=format&fit=crop&q=80&w=1000",
@@ -169,17 +170,10 @@ CUISINE_SYNONYMS: Dict[str, set[str]] = {
     "pizza": {"pizza", "pizzeria", "slice", "pies"},
     "sushi": {"sushi", "sashimi", "nigiri", "maki", "roll", "japanese", "raw_fish"},
     "japanese": {"japanese", "sushi", "ramen", "izakaya", "hibachi", "teriyaki", "udon"},
-    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "fast_food", "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "in_n_out", "five_guys", "shake_shack", "culvers", "culver", "sonic", "jack_in_the_box", "whataburger", "hardees", "carls_jr", "white_castle"},
-    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "fast_food", "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "in_n_out", "five_guys", "shake_shack", "culvers", "culver", "sonic", "jack_in_the_box", "whataburger", "hardees", "carls_jr", "white_castle"},
+    "burgers": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "smashburger", "slider", "sliders"},
+    "burger": {"burger", "burgers", "hamburger", "cheeseburger", "patty", "smashburger", "slider", "sliders"},
     "fast_food": {
-        "fast_food", "fastfood", "fast_food_restaurant", "quick_service", "drive_thru", "drive_through",
-        "mcdonalds", "mcdonald", "wendys", "wendy", "burger_king", "taco_bell", "chick_fil_a", "chickfila",
-        "subway", "popeyes", "popeye", "kfc", "kentucky_fried_chicken", "arbys", "arby", "sonic",
-        "culvers", "culver", "five_guys", "shake_shack", "in_n_out", "jack_in_the_box", "raising_canes",
-        "canes", "dairy_queen", "panda_express", "hardees", "hardee", "carls_jr", "whataburger",
-        "white_castle", "del_taco", "churchs_chicken", "churchs", "zaxbys", "zaxby", "wingstop",
-        "jimmy_johns", "jersey_mikes", "firehouse_subs", "little_caesars", "dominos", "pizza_hut",
-        "papa_johns", "burger", "burgers", "fries", "nuggets", "tenders", "value_meal",
+        "fast_food", "fastfood", "fast_food_restaurant", "quick_service", "drive_thru", "drive_through", "value_meal",
     },
     "thai": {"thai", "pad_thai", "pad thai", "curry", "siamese"},
     "seafood": {"seafood", "fish", "crab", "lobster", "oyster", "shrimp", "clam"},
@@ -192,7 +186,7 @@ CUISINE_SYNONYMS: Dict[str, set[str]] = {
     "bakery": {"bakery", "bake", "pastry", "bagel", "donut", "doughnut"},
     "dessert": {"dessert", "ice_cream", "ice cream", "sweet", "crepe"},
     "cafe": {"cafe", "coffee", "espresso", "bistro"},
-    "american": {"american", "diner", "traditional_american", "new_american", "wings", "sports_bar", "fast_food"},
+    "american": {"american", "diner", "traditional_american", "new_american", "wings", "sports_bar"},
     "latin_american": {"latin_american", "hispanic", "arepas", "empanadas"},
 }
 
@@ -233,6 +227,12 @@ def tag_matches_synset(tag_norm: str, synset: set[str]) -> bool:
     return False
 
 
+def is_fast_food_tag(tag: str) -> bool:
+    """Returns True if the normalized tag refers to fast food."""
+    t = normalize_tag(tag)
+    return t in {"fast_food", "fastfood", "fast_food_restaurant"} or t.startswith("fast_food")
+
+
 def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
     """
     Checks if two cuisine or dish tags overlap directly, via plural stems,
@@ -250,12 +250,22 @@ def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
     if ("latin" in a and b == "american") or ("latin" in b and a == "american"):
         return False
 
+    # Explicit isolation guard: Never cross-match 'fast_food' with specific food genres
+    # (e.g. 'burgers', 'pizza', 'mexican', 'italian', 'sushi', 'chinese', 'thai', 'seafood', etc.)
+    # A craving for Burgers must find genuine burger spots, NOT be replaced with generic Fast Food.
+    is_a_fast_food = is_fast_food_tag(a)
+    is_b_fast_food = is_fast_food_tag(b)
+    if is_a_fast_food != is_b_fast_food:
+        return False
+
     # Plural / singular direct check
     if len(a) > 3 and len(b) > 3 and a.rstrip("s") == b.rstrip("s"):
         return True
 
     # Strip standard descriptor suffixes (e.g. 'mexican_restaurant' -> 'mexican')
     for suffix in ["_restaurant", "_food", "_store", "_place", "_bar", "_house", "_grill"]:
+        if suffix == "_food" and (is_fast_food_tag(a) or is_fast_food_tag(b)):
+            continue
         a_base = a[:-len(suffix)] if a.endswith(suffix) else a
         b_base = b[:-len(suffix)] if b.endswith(suffix) else b
         if a_base == b_base:
@@ -272,11 +282,155 @@ def traits_overlap(cuisine_a: str, cuisine_b: str) -> bool:
     return False
 
 
+# Specific Cuisine Brand Dictionaries:
+# Accurately maps brand names to their specific cuisines when Google Places API
+# only provides generic types (e.g., 'fast_food_restaurant' or 'restaurant').
+BRAND_CUISINE_MAP: Dict[str, str] = {
+    # Burgers
+    "mcdonald": "Burgers",
+    "wendy": "Burgers",
+    "burger king": "Burgers",
+    "five guys": "Burgers",
+    "shake shack": "Burgers",
+    "in-n-out": "Burgers",
+    "culver": "Burgers",
+    "whataburger": "Burgers",
+    "jack in the box": "Burgers",
+    "white castle": "Burgers",
+    "smashburger": "Burgers",
+    "habit burger": "Burgers",
+    "red robin": "Burgers",
+    "hardee": "Burgers",
+    "carls jr": "Burgers",
+    "carl's jr": "Burgers",
+    "fuddrucker": "Burgers",
+    "steak n shake": "Burgers",
+    "steak 'n shake": "Burgers",
+    "freddy": "Burgers",
+    "hopdoddy": "Burgers",
+    "bad daddy": "Burgers",
+    "burgerfi": "Burgers",
+    "wayback burger": "Burgers",
+    "fatburger": "Burgers",
+    "checkers": "Burgers",
+    "rally's": "Burgers",
+    "krystal": "Burgers",
+
+    # Pizza
+    "domino": "Pizza",
+    "pizza hut": "Pizza",
+    "little caesar": "Pizza",
+    "papa john": "Pizza",
+    "marco's pizza": "Pizza",
+    "papa murphy": "Pizza",
+    "blaze pizza": "Pizza",
+    "mod pizza": "Pizza",
+    "mellow mushroom": "Pizza",
+    "jet's pizza": "Pizza",
+    "round table pizza": "Pizza",
+    "cici": "Pizza",
+    "sbarro": "Pizza",
+    "hungry howie": "Pizza",
+
+    # Mexican
+    "taco bell": "Mexican",
+    "del taco": "Mexican",
+    "chipotle": "Mexican",
+    "qdoba": "Mexican",
+    "moe's southwest": "Mexican",
+    "moes southwest": "Mexican",
+    "rubio": "Mexican",
+    "el pollo loco": "Mexican",
+    "baja fresh": "Mexican",
+    "torchy": "Mexican",
+    "taco cabana": "Mexican",
+    "chuy": "Mexican",
+
+    # Chicken
+    "chick-fil-a": "Chicken",
+    "popeye": "Chicken",
+    "kfc": "Chicken",
+    "kentucky fried chicken": "Chicken",
+    "raising cane": "Chicken",
+    "zaxby": "Chicken",
+    "church's chicken": "Chicken",
+    "church's texas chicken": "Chicken",
+    "wingstop": "Chicken",
+    "buffalo wild wings": "Chicken",
+    "bojangles": "Chicken",
+    "boston market": "Chicken",
+
+    # Sandwiches & Subs
+    "subway": "Sandwiches",
+    "jimmy john": "Sandwiches",
+    "jersey mike": "Sandwiches",
+    "firehouse sub": "Sandwiches",
+    "panera": "Sandwiches",
+    "arby": "Sandwiches",
+    "potbelly": "Sandwiches",
+    "schlotzsky": "Sandwiches",
+    "jason's deli": "Sandwiches",
+    "mcalister": "Sandwiches",
+    "charleys philly": "Sandwiches",
+
+    # Chinese / Asian
+    "panda express": "Chinese",
+    "pei wei": "Chinese",
+    "p.f. chang": "Chinese",
+
+    # Dessert & Cafe
+    "dairy queen": "Dessert",
+    "baskin-robbins": "Dessert",
+    "baskin robbins": "Dessert",
+    "cold stone": "Dessert",
+    "krispy kreme": "Bakery",
+    "dunkin": "Cafe",
+    "starbucks": "Cafe",
+    "dutch bros": "Cafe",
+    "crumbl": "Dessert",
+}
+
+FAST_FOOD_CHAINS = {
+    "mcdonald", "wendy", "burger king", "five guys", "shake shack", "in-n-out", "culver",
+    "whataburger", "jack in the box", "white castle", "smashburger", "habit burger",
+    "hardee", "carls jr", "carl's jr", "checkers", "rally's", "krystal", "sonic",
+    "taco bell", "del taco", "chipotle", "qdoba", "moe's southwest", "el pollo loco",
+    "chick-fil-a", "popeye", "kfc", "kentucky fried chicken", "raising cane", "zaxby",
+    "church's chicken", "wingstop", "bojangles",
+    "subway", "jimmy john", "jersey mike", "firehouse sub", "arby", "charleys philly",
+    "panda express", "dairy queen", "little caesar", "domino", "pizza hut", "papa john",
+}
+
+
 def format_cuisine_type(place_type: str) -> str:
-    """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican', 'fast_food_restaurant' -> 'Fast Food')."""
+    """Formats raw Places API type string (e.g. 'mexican_restaurant' -> 'Mexican', 'hamburger_restaurant' -> 'Burgers')."""
     raw = str(place_type).lower().strip()
-    if raw in {"fast_food", "fast_food_restaurant"}:
+    if raw in {"fast_food", "fast_food_restaurant", "fastfood"}:
         return "Fast Food"
+    if raw in {"hamburger_restaurant", "hamburger", "burger_restaurant", "burger", "burgers"}:
+        return "Burgers"
+    if raw in {"pizza_restaurant", "pizzeria", "pizza"}:
+        return "Pizza"
+    if raw in {"mexican_restaurant", "mexican"}:
+        return "Mexican"
+    if raw in {"italian_restaurant", "italian"}:
+        return "Italian"
+    if raw in {"japanese_restaurant", "sushi_restaurant", "sushi", "japanese"}:
+        return "Sushi"
+    if raw in {"chinese_restaurant", "chinese"}:
+        return "Chinese"
+    if raw in {"thai_restaurant", "thai"}:
+        return "Thai"
+    if raw in {"seafood_restaurant", "seafood"}:
+        return "Seafood"
+    if raw in {"sandwich_shop", "deli", "sandwiches", "sandwich"}:
+        return "Sandwiches"
+    if raw in {"chicken_restaurant", "chicken"}:
+        return "Chicken"
+    if raw in {"barbecue_restaurant", "bbq"}:
+        return "BBQ"
+    if raw in {"steak_house", "steakhouse", "steak"}:
+        return "Steakhouse"
     name = raw
     for suffix in ["_restaurant", "_store", "_place", "_bar", "_house", "_grill"]:
         if name.endswith(suffix):
@@ -291,11 +445,24 @@ def format_cuisine_type(place_type: str) -> str:
 def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -> List[str]:
     """
     Filters generic place types and extracts readable cuisine names from:
-    1. Google Places types (e.g. mexican_restaurant -> Mexican)
-    2. Restaurant display name keywords (e.g. 'Poblano Mexican Grill' -> Mexican)
-    3. Targeted search query hint
+    1. Known brand cuisine mapping (e.g. 'Five Guys' -> 'Burgers', 'Domino's' -> 'Pizza')
+    2. Google Places types (e.g. hamburger_restaurant -> Burgers, mexican_restaurant -> Mexican)
+    3. Restaurant display name keywords (e.g. 'Poblano Mexican Grill' -> Mexican)
+    4. Targeted search query hint
+    Guarantees that specific cuisines (Burgers, Pizza, Mexican, etc.) always precede generic categories (Fast Food, Restaurant).
     """
     cuisines: List[str] = []
+    name_lower = name.lower()
+    name_words = set(re.findall(r"\b[a-z0-9]+\b", name_lower))
+
+    # 1. Brand-specific authentic cuisine mapping
+    for brand, brand_cuisine in BRAND_CUISINE_MAP.items():
+        if brand in name_lower:
+            if brand_cuisine not in cuisines:
+                cuisines.append(brand_cuisine)
+            break
+
+    # 2. Extract from Google Places types
     for t in types:
         t_clean = str(t).strip().lower()
         if t_clean not in IGNORED_PLACE_TYPES:
@@ -303,8 +470,7 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
             if formatted and formatted not in cuisines:
                 cuisines.append(formatted)
 
-    name_lower = name.lower()
-    name_words = set(re.findall(r"\b[a-z0-9]+\b", name_lower))
+    # 3. Extract from name words matching CUISINE_SYNONYMS
     for cat, syns in CUISINE_SYNONYMS.items():
         matched_name = False
         for s in syns:
@@ -324,12 +490,34 @@ def extract_cuisines(types: List[str], name: str = "", hint_cuisine: str = "") -
             if formatted_cat and formatted_cat not in cuisines:
                 cuisines.append(formatted_cat)
 
+    # 4. Hint cuisine from targeted query
     if hint_cuisine:
         formatted_hint = format_cuisine_type(hint_cuisine)
         if formatted_hint and formatted_hint not in cuisines:
             cuisines.append(formatted_hint)
 
-    return cuisines if cuisines else ["Restaurant"]
+    # Fallback if empty
+    if not cuisines:
+        return ["Restaurant"]
+
+    # 5. PRIORITIZATION & ORDERING:
+    # Specific food cuisines MUST ALWAYS come before generic categories ('Fast Food', 'Restaurant', 'Food').
+    # If a hint_cuisine was provided, the hint cuisine should be at the very front.
+    generic_tags = {"Fast Food", "Restaurant", "Food"}
+    specific = [c for c in cuisines if c not in generic_tags]
+    generic = [c for c in cuisines if c in generic_tags]
+
+    if hint_cuisine:
+        hint_formatted = format_cuisine_type(hint_cuisine)
+        if hint_formatted in specific:
+            specific.remove(hint_formatted)
+            specific.insert(0, hint_formatted)
+        elif hint_formatted in generic:
+            generic.remove(hint_formatted)
+            generic.insert(0, hint_formatted)
+
+    ordered = specific + generic
+    return ordered if ordered else ["Restaurant"]
 
 
 def _parse_place_item(
@@ -349,8 +537,7 @@ def _parse_place_item(
     raw_types = p.get("types") or []
     name_clean = name.lower()
     is_fast_food = any("fast_food" in str(t).lower() for t in raw_types) or any(
-        brand in name_clean
-        for brand in ["mcdonald", "wendy", "burger king", "taco bell", "chick-fil-a", "subway", "popeye", "kfc", "arby", "sonic", "culver", "in-n-out", "jack in the box", "raising cane", "dairy queen", "panda express", "whataburger", "white castle", "del taco", "little caesar", "domino", "pizza hut"]
+        chain in name_clean for chain in FAST_FOOD_CHAINS
     )
 
     raw_price = p.get("priceLevel")
@@ -366,6 +553,12 @@ def _parse_place_item(
     cuisines = extract_cuisines(raw_types, name=name, hint_cuisine=hint_cuisine)
     if is_fast_food and "Fast Food" not in cuisines:
         cuisines.append("Fast Food")
+
+    # Re-verify ordering: specific cuisines always come first
+    generic_tags = {"Fast Food", "Restaurant", "Food"}
+    specific = [c for c in cuisines if c not in generic_tags]
+    generic = [c for c in cuisines if c in generic_tags]
+    cuisines = (specific + generic) if (specific or generic) else ["Restaurant"]
 
     coords = extract_coords(p.get("location"), location)
 
@@ -785,16 +978,7 @@ def recommend_restaurants(
                 allowed_prices.add(p_clean)
 
     if not allowed_prices:
-        allowed_prices = {"$$"}  # Default fallback if unspecified
-
-    # If group cravings include fast food, ensure "$" is allowed so fast food spots aren't blocked
-    all_desired = [
-        str(cuisine).strip().lower()
-        for request in mood_requests
-        for cuisine in request.get("desired_cuisines", [])
-    ]
-    if any("fast" in c for c in all_desired):
-        allowed_prices.add("$")
+        allowed_prices = {"$", "$$", "$$$", "$$$$"}  # Default fallback if unspecified
 
     # Map to Google Places API (New) priceLevel filter enums
     target_google_prices = [
