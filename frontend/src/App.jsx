@@ -199,7 +199,7 @@ function WeightsInspector({ consensusData, members }) {
   if (!consensusData && (!members || members.length === 0)) return null
 
   const rawPositive = consensusData?.positive_weights || {}
-  const positiveList = Array.isArray(rawPositive)
+  const rawPositiveItems = Array.isArray(rawPositive)
     ? rawPositive.map((item) => ({
         trait: typeof item === 'object' ? item.trait || item.name || 'Trait' : String(item),
         weight: typeof item === 'object' ? Number(item.weight ?? 1) : 1,
@@ -208,21 +208,71 @@ function WeightsInspector({ consensusData, members }) {
         trait: key,
         weight: typeof val === 'object' ? Number(val.weight ?? 1) : Number(val ?? 1),
       }))
+
+  // Strictly positive weights ONLY (> 0)
+  const positiveList = rawPositiveItems.filter((item) => item.weight > 0)
   positiveList.sort((a, b) => b.weight - a.weight)
   const maxPositiveWeight = Math.max(...positiveList.map((p) => p.weight), 1)
 
+  // Negative weights (penalties, vetoes, allergies <= 0)
   const rawVetoes = consensusData?.vetoes_and_allergies || []
-  const vetoList = Array.isArray(rawVetoes)
+  const initialVetoList = Array.isArray(rawVetoes)
     ? rawVetoes.map((item) => ({
         trait: typeof item === 'object' ? item.trait || item.name || 'Restricted' : String(item),
-        weight: typeof item === 'object' ? Number(item.weight ?? -100) : -100,
-        isAllergy: typeof item === 'object' ? Boolean(item.is_allergy) : false,
+        weight: typeof item === 'object' ? Number(item.weight ?? -2.5) : -2.5,
+        isAllergy: typeof item === 'object' ? Boolean(item.is_allergy) : true,
       }))
     : Object.entries(rawVetoes).map(([key, val]) => ({
         trait: key,
-        weight: typeof val === 'object' ? Number(val.weight ?? -100) : Number(val ?? -100),
-        isAllergy: false,
+        weight: typeof val === 'object' ? Number(val.weight ?? -2.5) : Number(val ?? -2.5),
+        isAllergy: true,
       }))
+
+  // Pull any negative values that may have been passed inside rawPositive into vetoList
+  const negativeItems = rawPositiveItems
+    .filter((item) => item.weight < 0)
+    .map((item) => ({
+      trait: item.trait,
+      weight: item.weight,
+      isAllergy: item.weight > -50,
+    }))
+
+  const combinedVetoList = [...initialVetoList, ...negativeItems]
+
+  if (members && Array.isArray(members)) {
+    members.forEach((m) => {
+      if (!m.has_submitted || !m.preferences) return
+      ;(m.preferences.allergies || []).forEach((a) => {
+        const norm = String(a || '').trim()
+        if (norm && !combinedVetoList.some((item) => item.trait.toLowerCase() === norm.toLowerCase())) {
+          combinedVetoList.push({
+            trait: norm,
+            weight: -2.5,
+            isAllergy: true,
+          })
+        }
+      })
+      ;(m.preferences.vetoed_cuisines || []).forEach((v) => {
+        const norm = String(v || '').trim()
+        if (norm && !combinedVetoList.some((item) => item.trait.toLowerCase() === norm.toLowerCase())) {
+          combinedVetoList.push({
+            trait: norm,
+            weight: -100.0,
+            isAllergy: false,
+          })
+        }
+      })
+    })
+  }
+
+  const seenTraits = new Set()
+  const vetoList = combinedVetoList.filter((item) => {
+    const k = item.trait.toLowerCase()
+    if (seenTraits.has(k)) return false
+    seenTraits.add(k)
+    return true
+  })
+  vetoList.sort((a, b) => a.weight - b.weight)
 
   return (
     <div className="w-full max-w-7xl mx-auto mb-6 bg-card border-2 border-navy-900 rounded-2xl shadow-[4px_4px_0px_0px_rgba(28,46,53,1)] overflow-hidden transition-all text-navy-900">
@@ -265,7 +315,9 @@ function WeightsInspector({ consensusData, members }) {
                   {positiveList.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between">
                       <span className="capitalize font-bold">{item.trait}</span>
-                      <span className="text-green-700 font-bold bg-green-50 px-1.5 py-0.5 rounded">+{Number(item.weight).toFixed(1)}</span>
+                      <span className="text-green-700 font-bold bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
+                        +{Number(item.weight).toFixed(1)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -281,9 +333,16 @@ function WeightsInspector({ consensusData, members }) {
               ) : (
                 <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   {vetoList.map((item, idx) => (
-                    <div key={idx} className="flex items-center justify-between bg-red-50 p-1 rounded">
-                      <span className="capitalize font-bold text-red-900">{item.trait}</span>
-                      <span className="text-red-700 font-bold">{item.isAllergy ? 'Allergy Penalty' : 'Vetoed'}</span>
+                    <div key={idx} className="flex items-center justify-between bg-red-50 border border-red-200 p-1.5 rounded-lg">
+                      <div className="flex flex-col">
+                        <span className="capitalize font-bold text-red-900">{item.trait}</span>
+                        <span className="text-[10px] text-red-600 font-bold uppercase font-mono">
+                          {item.isAllergy ? 'Allergy Penalty' : 'Strict Veto'}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-xs text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded">
+                        {Number(item.weight).toFixed(1)}
+                      </span>
                     </div>
                   ))}
                 </div>
@@ -409,14 +468,13 @@ function EntryScreen({ onJoin }) {
 
   return (
     <div className="min-h-screen bg-background text-navy-900 font-sans p-4 sm:p-8 flex flex-col justify-between">
-      {/* Top Header with official logo seamlessly integrated */}
+      {/* Top Header - Clean transparent vector branding */}
       <header className="flex justify-between items-center max-w-5xl w-full mx-auto mb-6 sm:mb-8">
-        <div className="flex items-center">
-          <img
-            src="/food-finder-logo.png"
-            alt="Food Finder Logo"
-            className="h-12 sm:h-16 object-contain"
-          />
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-navy-900 text-white flex items-center justify-center shadow-[2px_2px_0px_0px_rgba(255,90,54,1)]">
+            <UtensilsCrossed size={18} />
+          </div>
+          <span className="font-bold text-xl tracking-tight leading-none text-navy-900">food finder</span>
         </div>
         <div className="flex items-center gap-2 border-2 border-navy-900 rounded-full px-3.5 py-1.5 bg-white shadow-[2px_2px_0px_0px_rgba(28,46,53,1)]">
           <div className="w-2.5 h-2.5 rounded-full bg-orange-500 animate-pulse"></div>
@@ -426,24 +484,47 @@ function EntryScreen({ onJoin }) {
 
       {/* Main Two-Column Card Layout */}
       <main className="max-w-5xl w-full mx-auto bg-card rounded-3xl border-2 border-navy-900 shadow-[6px_6px_0px_0px_rgba(28,46,53,1)] overflow-hidden flex flex-col md:flex-row my-auto">
-        {/* Left Dark Column */}
+        {/* Left Dark Column - Transparent Logo Seamlessly Integrated into Main FOOD FINDER text */}
         <section className="bg-navy-900 text-white p-8 sm:p-12 md:w-5/12 flex flex-col justify-between relative overflow-hidden border-b-2 md:border-b-0 md:border-r-2 border-navy-900">
           <div>
-            <div className="text-[10px] font-mono tracking-widest text-[#FF7A59] uppercase font-bold mb-4">
-              THE GROUP DINNER DECISION DEVICE
+            <div className="text-[10px] font-mono tracking-widest text-[#FF7A59] uppercase font-bold mb-5 flex items-center gap-1.5">
+              <span>★</span> THE GROUP DINNER DECISION DEVICE
             </div>
-            <h1 className="text-5xl sm:text-6xl font-black text-[#FF6B4A] tracking-tighter leading-[0.92] mb-8 uppercase font-sans">
-              FOOD<br />FINDER.
-            </h1>
+
+            {/* Logo Emblem & Main Brand Text seamlessly integrated */}
+            <div className="mb-6">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-[#142227] border-2 border-[#FF5A36] p-1.5 shadow-[3px_3px_0px_0px_rgba(255,90,54,0.4)] flex items-center justify-center shrink-0 relative">
+                  <img src="/favicon.svg" alt="Food Finder Pin Logo" className="w-full h-full object-contain" />
+                  <div className="absolute -top-1 -right-1 flex gap-0.5">
+                    <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs font-mono font-bold uppercase tracking-widest text-green-400 block">OFFICIAL</span>
+                  <span className="text-xs font-mono tracking-wider text-white/70">Decision Device</span>
+                </div>
+              </div>
+
+              <h1 className="text-5xl sm:text-6xl font-black text-[#FF6B4A] tracking-tighter leading-[0.92] uppercase font-sans">
+                FOOD<br />
+                <span className="text-white relative">
+                  FINDER
+                  <span className="text-green-400">.</span>
+                  <span className="absolute -top-2.5 -right-5 text-green-400 text-base select-none">✦</span>
+                </span>
+              </h1>
+            </div>
+
             <p className="text-sm sm:text-base text-white/80 font-medium leading-relaxed">
               Less &ldquo;where should we eat?&rdquo;<br />
               More &ldquo;see you there.&rdquo;
             </p>
           </div>
 
-          <div className="mt-12 flex items-center justify-between">
-            <div className="w-12 h-12 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
-              <UtensilsCrossed size={22} />
+          <div className="mt-10 flex items-center justify-between pt-6 border-t border-white/10">
+            <div className="w-11 h-11 rounded-full bg-green-400 border-2 border-navy-900 flex items-center justify-center text-navy-900 font-bold shadow-[2px_2px_0px_0px_rgba(0,0,0,0.4)]">
+              <UtensilsCrossed size={20} />
             </div>
             <span className="text-[10px] font-mono tracking-widest uppercase text-white/40">
               FAST · LIVE · FAIR
@@ -721,6 +802,7 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
     if (backendPositive && Object.keys(backendPositive).length > 0) {
       return Object.entries(backendPositive)
         .map(([trait, weight]) => ({ trait, weight: Number(weight) }))
+        .filter((item) => item.weight > 0)
         .sort((a, b) => b.weight - a.weight)
     }
 
@@ -739,10 +821,43 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
 
     return Object.entries(traitCounts)
       .map(([trait, weight]) => ({ trait, weight }))
+      .filter((item) => item.weight > 0)
       .sort((a, b) => b.weight - a.weight)
   })()
 
   const maxLiveWeight = Math.max(...liveWeightsList.map((w) => w.weight), 1)
+
+  // Live active dietary restrictions & allergies (strictly negative, in red)
+  const liveRestrictionsList = (() => {
+    const rawVetoes = lobby?.consensus_data?.vetoes_and_allergies || []
+    if (rawVetoes.length > 0) {
+      return rawVetoes.map((item) => ({
+        trait: typeof item === 'object' ? item.trait || item.name : String(item),
+        weight: typeof item === 'object' ? Number(item.weight ?? -2.5) : -2.5,
+        isAllergy: typeof item === 'object' ? Boolean(item.is_allergy) : true,
+      }))
+    }
+    const restrictions = []
+    lobby.members.forEach((member) => {
+      if (!member.has_submitted) return
+      const prefs = member.preferences
+      const allergies = prefs?.allergies || []
+      allergies.forEach((a) => {
+        const norm = String(a || '').trim()
+        if (norm && !restrictions.some((r) => r.trait.toLowerCase() === norm.toLowerCase())) {
+          restrictions.push({ trait: norm, weight: -2.5, isAllergy: true })
+        }
+      })
+      const vetoed = prefs?.vetoed_cuisines || []
+      vetoed.forEach((v) => {
+        const norm = String(v || '').trim()
+        if (norm && !restrictions.some((r) => r.trait.toLowerCase() === norm.toLowerCase())) {
+          restrictions.push({ trait: norm, weight: -100.0, isAllergy: false })
+        }
+      })
+    })
+    return restrictions
+  })()
 
   // Colors for member avatars
   const avatarColors = ['bg-orange-500', 'bg-purple-300', 'bg-green-400', 'bg-red-300', 'bg-blue-300', 'bg-amber-300']
@@ -1030,38 +1145,66 @@ function PreferencesScreen({ lobby, session, connection, send, onLeave, error, c
               </span>
             </div>
 
-            {liveWeightsList.length === 0 ? (
+            {liveWeightsList.length === 0 && liveRestrictionsList.length === 0 ? (
               <div className="bg-white/70 border border-navy-900/10 rounded-2xl p-4 text-center">
                 <p className="text-xs font-mono text-navy-900/60">
                   Weights calculate dynamically as participants lock in their cravings.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
-                {liveWeightsList.map((item, idx) => {
-                  const percent = Math.min(100, Math.round((item.weight / maxLiveWeight) * 100))
-                  return (
-                    <div key={idx} className="space-y-1">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-navy-900 capitalize font-mono flex items-center gap-1.5">
-                          <span className="w-4 h-4 rounded-full bg-navy-900 text-white text-[9px] flex items-center justify-center font-bold">
-                            #{idx + 1}
-                          </span>
-                          {item.trait}
-                        </span>
-                        <span className="font-mono font-bold text-[11px] text-green-800 bg-green-100 px-2 py-0.5 rounded border border-green-300">
-                          +{Number(item.weight).toFixed(1)} pts
-                        </span>
-                      </div>
-                      <div className="h-2.5 bg-navy-900/10 rounded-full overflow-hidden border border-navy-900/20">
-                        <div
-                          className="h-full bg-green-400 rounded-full transition-all duration-500"
-                          style={{ width: `${percent}%` }}
-                        ></div>
-                      </div>
+              <div className="space-y-4 max-h-72 overflow-y-auto pr-1">
+                {liveWeightsList.length > 0 && (
+                  <div className="space-y-3">
+                    {liveWeightsList.map((item, idx) => {
+                      const percent = Math.min(100, Math.round((item.weight / maxLiveWeight) * 100))
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="font-bold text-navy-900 capitalize font-mono flex items-center gap-1.5">
+                              <span className="w-4 h-4 rounded-full bg-navy-900 text-white text-[9px] flex items-center justify-center font-bold">
+                                #{idx + 1}
+                              </span>
+                              {item.trait}
+                            </span>
+                            <span className="font-mono font-bold text-[11px] text-green-800 bg-green-100 px-2 py-0.5 rounded border border-green-300">
+                              +{Number(item.weight).toFixed(1)} pts
+                            </span>
+                          </div>
+                          <div className="h-2.5 bg-navy-900/10 rounded-full overflow-hidden border border-navy-900/20">
+                            <div
+                              className="h-full bg-green-400 rounded-full transition-all duration-500"
+                              style={{ width: `${percent}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {liveRestrictionsList.length > 0 && (
+                  <div className="pt-2 border-t border-navy-900/10 space-y-2">
+                    <div className="text-[10px] font-mono font-bold uppercase tracking-wider text-red-600 flex items-center gap-1">
+                      <ShieldAlert size={12} />
+                      <span>Active Restrictions & Allergies</span>
                     </div>
-                  )
-                })}
+                    <div className="space-y-1.5">
+                      {liveRestrictionsList.map((item, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs bg-red-50 border border-red-200 rounded-xl px-2.5 py-1.5"
+                        >
+                          <span className="font-bold text-navy-900 capitalize font-mono text-[11px] truncate">
+                            {item.trait}
+                          </span>
+                          <span className="font-mono font-bold text-[11px] text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-300 shrink-0">
+                            {Number(item.weight).toFixed(1)} pts
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

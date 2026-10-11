@@ -220,16 +220,42 @@ class LobbyManager:
             lobby.consensus_data = None
             return
         try:
-            from engine import calculate_consensus_vector
+            from engine import calculate_consensus_vector, format_cuisine_type
             weights = calculate_consensus_vector(submitted_prefs)
+            positive_weights = {
+                format_cuisine_type(k): round(v, 2)
+                for k, v in sorted(weights.items(), key=lambda x: x[1], reverse=True)
+                if v > 0
+            }
             vetoes_and_allergies = []
+            seen_negatives = set()
             for p in submitted_prefs:
                 for v in p.get("vetoed_cuisines", []):
-                    vetoes_and_allergies.append({"trait": v, "weight": -100, "is_allergy": False})
+                    clean_v = format_cuisine_type(v)
+                    k = clean_v.lower()
+                    if k not in seen_negatives:
+                        seen_negatives.add(k)
+                        vetoes_and_allergies.append({"trait": clean_v, "weight": -100.0, "is_allergy": False})
                 for a in p.get("allergies", []):
-                    vetoes_and_allergies.append({"trait": a, "weight": -50, "is_allergy": True})
+                    clean_a = format_cuisine_type(a)
+                    k = clean_a.lower()
+                    if k not in seen_negatives:
+                        seen_negatives.add(k)
+                        vetoes_and_allergies.append({"trait": clean_a, "weight": -2.5, "is_allergy": True})
+
+            for k, v in sorted(weights.items(), key=lambda x: x[1]):
+                if v < 0:
+                    clean_k = format_cuisine_type(k)
+                    if clean_k.lower() not in seen_negatives:
+                        seen_negatives.add(clean_k.lower())
+                        vetoes_and_allergies.append({
+                            "trait": clean_k,
+                            "weight": round(v, 2),
+                            "is_allergy": v > -50.0,
+                        })
+
             lobby.consensus_data = {
-                "positive_weights": weights,
+                "positive_weights": positive_weights,
                 "vetoes_and_allergies": vetoes_and_allergies,
                 "is_live_draft": True,
             }
